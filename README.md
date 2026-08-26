@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.5.1**
+> Current add-on version: **0.5.3**
 
 ## Features
 
@@ -35,7 +35,7 @@ Firmware identification is separated into useful fields. For example, `OpenBK723
 Multi-channel OpenBeken devices can be represented as individual controllable outputs while sharing one physical device/IP. OpenBKAdmin reuses information obtained from the physical device instead of querying the same IP separately for every channel.
 
 ### Network Auto Scan
-Auto Scan supports configurable IP ranges and ports and validates discovered OpenBeken endpoints. Version 0.5.1 adds a more tolerant two-pass network probe and an OpenBeken-native discovery fallback using `/obkdevicelist`, the HTTP peer list exposed by the firmware SSDP `obkDeviceList` implementation.
+Auto Scan supports configurable IP ranges and ports and validates discovered OpenBeken endpoints. Version 0.5.1 added a more tolerant two-pass network probe and an OpenBeken-native discovery fallback using `/obkdevicelist`, the HTTP peer list exposed by the firmware SSDP `obkDeviceList` implementation.
 
 ### MQTT discovery
 MQTT-assisted discovery supports broker host, port, credentials, discovery subscriptions/timeouts and command/status/telemetry prefixes.
@@ -53,12 +53,16 @@ The interface exposes supported OpenBeken configuration including network, MQTT,
 OpenBKAdmin firmware management is designed specifically around **OpenBeken**:
 - Manual firmware upload
 - Automatic firmware retrieval from the official OpenBeken GitHub releases
+- Automatic chipset detection for selected physical devices
 - Chipset-aware firmware selection for each physical device
-- Uses only the firmware asset identified as **OTA Update** for the device chipset
+- Uses only the firmware asset identified as **OTA Update** for the detected device chipset
 - Compares installed and available firmware versions
 - Offers normal updates only when the official firmware is newer
 - Avoids automatic downgrade to an older release
-- Updates multiple selected devices, resolving the correct OTA image per chipset
+- Updates multiple selected devices, resolving the correct OTA image independently per chipset
+- Revalidates the chipset immediately before preparing an automatic firmware update
+- Blocks automatic flashing when a compatible chipset/OTA target cannot be resolved safely
+- Uses device Full Name in the firmware update workflow when available
 - Uses the OpenBeken OTA command flow: `OtaUrl <url>` followed by `Upgrade 1`
 
 Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/releases
@@ -107,6 +111,19 @@ hassio-openbkadmin/
 ## Changelog
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
+
+### 0.5.3
+- Automatic chipset detection in the Official OpenBeken Release workflow
+- Revalidates each selected device chipset immediately before automatic OTA preparation
+- Resolves the correct official OTA image independently for mixed-chipset device selections
+- Blocks automatic firmware flashing when the chipset or compatible OTA target cannot be resolved safely
+- Shows Full Name, detected chipset and IP during firmware update selection/preparation
+- Firmware update logs prioritize the OpenBeken Full Name when available
+- Keeps installed-versus-available version checks and downgrade protection
+
+### 0.5.2
+- Improved automatic OpenBeken OTA preparation and chipset-aware update handling
+- Continued firmware workflow cleanup for physical devices and multi-device updates
 
 ### 0.5.1
 - More reliable OpenBeken Auto Scan with two-pass probing
