@@ -1,8 +1,3 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="OpenBKAdmin">
-  <defs>
-    <clipPath id="openbkadminCircle">
-      <circle cx="32" cy="32" r="30"/>
-    </clipPath>
-  </defs>
-  <image href="openbkadmin-icon.png" x="2" y="2" width="60" height="60" preserveAspectRatio="xMidYMid slice" clip-path="url(#openbkadminCircle)"/>
+  <image href="./openbkadmin-icon.png?v=054" x="0" y="0" width="64" height="64" preserveAspectRatio="xMidYMid meet"/>
 </svg>
