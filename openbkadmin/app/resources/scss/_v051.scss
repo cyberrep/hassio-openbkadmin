@@ -1,4 +1,4 @@
-/* OpenBKAdmin 0.5.1 UI fixes */
+/* OpenBKAdmin UI fixes */
 #device-list th.cmd_cb,
 #device-list td.cmd_cb {
   text-align: center;
@@ -27,9 +27,17 @@
   margin: 0;
 }
 
-/* The navbar logo SVG clips the supplied OpenBKAdmin artwork to the round icon. */
 .navbar-brand.logo img {
   width: 50px;
   height: 50px;
   object-fit: contain;
+}
+
+/* 0.5.2: OpenBeken firmware is resolved automatically from the device chipset.
+   Legacy Tasmota-style ESP/platform and release-channel selectors are no longer needed. */
+.site-config-page .col:has(> #update_channel),
+.site-config-page .col:has(> label[for="update_automatic_lang"]),
+.site-config-page .col:has(> label[for="update_automatic_lang_esp32"]),
+.site-config-page .col:has(> label[for="auto_update_channel"]) {
+  display: none !important;
 }
