@@ -1,5 +1,22 @@
 # OpenBKAdmin Changelog
 
+## [0.5.1] - 2026-08-26
+
+### Firmware update
+- Verified the OpenBeken OTA command flow against the upstream OpenBeken command implementation: set `OtaUrl` to the selected chipset OTA image, then trigger `Upgrade 1`.
+- Keeps automatic firmware selection chipset-aware and continues using only the official **OTA Update** asset published in `openshwprojects/OpenBK7231T_App` releases.
+- Multi-device updates continue resolving the target independently for each physical device/chipset.
+
+### Device discovery
+- Improved Network Auto Scan reliability with a two-pass TCP probe instead of relying on a single very short connection attempt.
+- Added an OpenBeken-native discovery fallback using `/obkdevicelist`, the HTTP list provided by the firmware SSDP `obkDeviceList` implementation.
+- Peers returned by OpenBeken are validated as real OpenBeken devices before being shown by OpenBKAdmin.
+- Existing configured devices remain excluded from the add-device results.
+
+### Interface and branding
+- Changed the navigation branding to the round OpenBKAdmin icon style.
+- Centered the device-selection checkboxes in both the header and device rows.
+
 ## [0.5.0] - 2026-08-26
 
 ### Firmware update
