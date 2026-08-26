@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.5.7**
+> Current add-on version: **0.5.8**
 
 ## Features
 
@@ -63,7 +63,7 @@ OpenBKAdmin firmware management is designed specifically around **OpenBeken**:
 - Offers normal updates only when the official firmware is newer
 - Avoids automatic downgrade
 - Supports mixed-chipset selections
-- Shows selected device Full Name, chipset, current firmware and IP
+- Shows selected device Full Name, chipset, numeric current firmware version and IP
 - Caches release metadata to reduce GitHub API rate-limit failures
 - Supports **Mass** parallel OTA and **Individual** sequential OTA modes
 - Limits post-OTA status verification to five attempts per device
@@ -115,6 +115,11 @@ hassio-openbkadmin/
 ## Changelog
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
+
+### 0.5.8
+- OTA device heading shows chipset separately and only the numeric installed firmware version
+- OTA heading labels use the existing multilingual translation keys
+- Reviewed pt-BR remains the Portuguese translation baseline
 
 ### 0.5.7
 - Native OpenBeken `Ch` channel values used for ON/OFF state
