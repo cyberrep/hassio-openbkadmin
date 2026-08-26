@@ -1,5 +1,12 @@
 # OpenBKAdmin Changelog
 
+## [0.5.8] - 2026-08-26
+
+### Firmware update
+- OTA device headings now show only the numeric installed firmware version (for example `1.18.302`) while chipset remains a separate field.
+- OTA heading labels reuse the existing localization keys so Device, Chipset and Version follow the selected interface language.
+- Portuguese localization remains based on the reviewed pt-BR translation set.
+
 ## [0.5.7] - 2026-08-26
 
 ### Device state
