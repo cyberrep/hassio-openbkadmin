@@ -9,9 +9,9 @@ class OpenBeken {
   }
 
   getStatus(ip, id, callback) {
-    // Status 0 is a Tasmota compatibility response in OpenBeken and its POWER
-    // value is not authoritative for OBK channels. Fetch native `Ch` values
-    // and merge them into the status payload used by the device list.
+    // Status 0 is only the Tasmota-compatible status layer. OpenBeken's native
+    // channel values are authoritative for relay state, so enrich every status
+    // request with the native `Ch` command.
     this._doAjax(ip, id, "Status 0", (status) => {
       if (!status || status.ERROR || status.WARNING) {
         callback(status);
@@ -27,7 +27,37 @@ class OpenBeken {
   }
 
   getAllStatus(timeout, callback) {
-    this._doAjaxAll(timeout, "Status 0", callback);
+    // Keep the fast bulk Status 0 request for the list, but enrich every online
+    // OpenBeken device with its native channel values before rendering. Without
+    // this, the initial page load can show the compatibility POWER state instead
+    // of the real OpenBeken channel state.
+    this._doAjaxAll(timeout, "Status 0", (result) => {
+      if (!result || typeof result !== "object") {
+        callback(result);
+        return;
+      }
+
+      const ids = Object.keys(result).filter((id) => {
+        const status = result[id];
+        return status && !status.ERROR && !status.WARNING && status.statusText === undefined;
+      });
+
+      if (ids.length === 0) {
+        callback(result);
+        return;
+      }
+
+      let pending = ids.length;
+      ids.forEach((id) => {
+        this._doAjax(null, id, "Ch", (channels) => {
+          if (channels && !channels.ERROR && !channels.WARNING && result[id]) {
+            result[id].OpenBKChannels = channels;
+          }
+          pending -= 1;
+          if (pending === 0) callback(result);
+        });
+      });
+    });
   }
 
   updateConfig(device_id, cmnd, newvalue, callback) {
@@ -87,15 +117,17 @@ class OpenBeken {
   }
 
   parseDeviceStatus(data, device_relais) {
-    // Prefer native OpenBeken channel data. `Ch` returns all used channels in
-    // JSON and is the same channel state used by the native OBK Web UI.
+    // OpenBeken channels are zero-based (Channel0 is the first channel), while
+    // OpenBKAdmin's relay rows are one-based (relay 1 is the first row). Prefer
+    // relay-1 first. The previous order checked Channel1 before Channel0 for the
+    // first relay and could therefore display another channel's state.
     if (data && data.OpenBKChannels) {
       const channels = data.OpenBKChannels;
       const relay = Number.parseInt(device_relais, 10);
       const candidates = [];
       if (!Number.isNaN(relay)) {
-        candidates.push(`Channel${relay}`, `Ch${relay}`);
         if (relay > 0) candidates.push(`Channel${relay - 1}`, `Ch${relay - 1}`);
+        candidates.push(`Channel${relay}`, `Ch${relay}`);
       }
       for (const key of candidates) {
         if (Object.prototype.hasOwnProperty.call(channels, key)) {
@@ -124,7 +156,13 @@ class OpenBeken {
       const value = data.POWER;
       device_status = value && value.STATE !== undefined ? value.STATE : value;
     }
-    return device_status;
+
+    if (typeof device_status === "boolean") return device_status ? "ON" : "OFF";
+    if (typeof device_status === "number") return device_status !== 0 ? "ON" : "OFF";
+    const normalized = String(device_status).trim().toUpperCase();
+    if (normalized === "1" || normalized === "TRUE" || normalized === "ON") return "ON";
+    if (normalized === "0" || normalized === "FALSE" || normalized === "OFF") return "OFF";
+    return normalized || "NONE";
   }
 
   parseDeviceHostname(data) {
