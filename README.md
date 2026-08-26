@@ -1,4 +1,6 @@
 # OpenBKAdmin
+<img width="2172" height="724" alt="image" src="https://github.com/user-attachments/assets/75a60374-1bd0-4450-86d4-d6fd79c69613" />
+
 
 **Centralized OpenBeken device management for Home Assistant**
 
