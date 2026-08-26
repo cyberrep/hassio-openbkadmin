@@ -1,380 +1,99 @@
 <?php
 
-use League\CommonMark\GithubFlavoredMarkdownConverter;
-use Symfony\Component\BrowserKit\HttpBrowser;
 use OpenBKAdmin\Device;
 use OpenBKAdmin\Helper\FirmwareFolderHelper;
 use OpenBKAdmin\Helper\FirmwareVersionExtractor;
-use OpenBKAdmin\Helper\GuzzleFactory;
 use OpenBKAdmin\Helper\OtaHelper;
-use OpenBKAdmin\Helper\OpenBekenHelper;
-use OpenBKAdmin\Helper\OpenBekenOtaScraper;
 use OpenBKAdmin\OpenBeken;
-use OpenBKAdmin\Update\FirmwareChecker;
-use OpenBKAdmin\Update\FirmwareDownloader;
 
 $OpenBeken = $container->get(OpenBeken::class);
-
 $errors = [];
 $messages = [];
-$firmwarefolder = _DATADIR_.'firmwares/';
-$minimal_firmware_path = '';
-$new_firmware_path = '';
-$targetVersion = '';
 $updateTargets = [];
-
-$maxMb = 5;
-$maxFileSize = $maxMb * 1024 * 1024;
-
+$firmwarefolder = _DATADIR_.'firmwares/';
 FirmwareFolderHelper::clean($firmwarefolder);
 
-if (isset($_REQUEST['upload'])) {
-    if ('' == $_FILES['minimal_firmware']['name']) {
-        $errors[] = __('UPLOAD_FIRMWARE_MINIMAL_LABEL', 'DEVICE_UPDATE').': '.__(
-            'UPLOAD_FIRMWARE_MINIMAL_SKIP',
-            'DEVICE_UPDATE'
-        ).'<br/>';
-    } else {
-        try {
-            // Undefined | Multiple Files | $_FILES Corruption Attack
-            // If this request falls under any of them, treat it invalid.
-            if (!isset($_FILES['minimal_firmware']['error'])
-                || is_array($_FILES['minimal_firmware']['error'])) {
-                throw new RuntimeException(__('UPLOAD_FIRMWARE_MINIMAL_INVALID_FILES', 'DEVICE_UPDATE'));
-            }
-
-            // Check $_FILES['minimal_firmware']['error'] value.
-            switch ($_FILES['minimal_firmware']['error']) {
-                case UPLOAD_ERR_OK:
-                    break;
-
-                case UPLOAD_ERR_NO_FILE:
-                    throw new RuntimeException(__('UPLOAD_FIRMWARE_MINIMAL_ERR_NO_FILE', 'DEVICE_UPDATE'));
-
-                case UPLOAD_ERR_INI_SIZE:
-                case UPLOAD_ERR_FORM_SIZE:
-                    throw new RuntimeException(__('UPLOAD_FIRMWARE_MINIMAL_ERR_FORM_SIZE', 'DEVICE_UPDATE'));
-
-                default:
-                    throw new RuntimeException(__('UPLOAD_FIRMWARE_MINIMAL_UNKNOWN_ERROR', 'DEVICE_UPDATE'));
-            }
-
-            // You should also check filesize here.
-            if ($_FILES['minimal_firmware']['size'] > 502000) {
-                throw new RuntimeException(
-                    __('UPLOAD_FIRMWARE_MINIMAL_TOO_BIG', 'DEVICE_UPDATE', ['maxsize' => '502kb'])
-                );
-            }
-            if (in_array($_FILES['minimal_firmware']['type'], ['application/gzip', 'application/x-gzip'])) {
-                $ext = 'bin.gz';
-            } elseif (in_array($_FILES['minimal_firmware']['type'], ['application/octet-stream', 'application/macbinary'])) {
-                $ext = 'bin';
-            } else {
-                throw new RuntimeException(
-                    __('UPLOAD_FIRMWARE_MINIMAL_WRONG_FORMAT', 'DEVICE_UPDATE', $_FILES['minimal_firmware']['type'])
-                );
-            }
-
-            $minimal_firmware_path = $firmwarefolder.'OpenBeken-minimal.'.$ext;
-
-            if (!move_uploaded_file(
-                $_FILES['minimal_firmware']['tmp_name'],
-                $minimal_firmware_path
-            )) {
-                throw new RuntimeException(
-                    __(
-                        'UPLOAD_FIRMWARE_MINIMAL_COULD_NOT_SAVE',
-                        'DEVICE_UPDATE',
-                        ['FWPath' => $minimal_firmware_path]
-                    )
-                );
-            }
-
-            $messages[] = __('UPLOAD_FIRMWARE_MINIMAL_LABEL', 'DEVICE_UPDATE').': '.__(
-                'UPLOAD_FIRMWARE_MINIMAL_SUCCESSFULLY',
-                'DEVICE_UPDATE'
-            );
-        } catch (RuntimeException $e) {
-            $errors[] = __('UPLOAD_FIRMWARE_MINIMAL_LABEL', 'DEVICE_UPDATE').': '.$e->getMessage().'!';
-        }
-    }
-
-    try {
-        // Undefined | Multiple Files | $_FILES Corruption Attack
-        // If this request falls under any of them, treat it invalid.
-        if (!isset($_FILES['new_firmware']['error'])
-            || is_array($_FILES['new_firmware']['error'])) {
-            throw new RuntimeException(__('UPLOAD_FIRMWARE_FULL_INVALID_FILES', 'DEVICE_UPDATE'));
-        }
-
-        // Check $_FILES['new_firmware']['error'] value.
-        switch ($_FILES['new_firmware']['error']) {
-            case UPLOAD_ERR_OK:
-                break;
-
-            case UPLOAD_ERR_NO_FILE:
-                throw new RuntimeException(__('UPLOAD_FIRMWARE_FULL_ERR_NO_FILE', 'DEVICE_UPDATE'));
-
-            case UPLOAD_ERR_INI_SIZE:
-            case UPLOAD_ERR_FORM_SIZE:
-                throw new RuntimeException(__('UPLOAD_FIRMWARE_FULL_ERR_FORM_SIZE', 'DEVICE_UPDATE'));
-
-            default:
-                throw new RuntimeException(__('UPLOAD_FIRMWARE_FULL_UNKNOWN_ERROR', 'DEVICE_UPDATE'));
-        }
-
-        // You should also check filesize here.
-        if ($_FILES['new_firmware']['size'] > $maxFileSize) {
-            throw new RuntimeException(__('UPLOAD_FIRMWARE_FULL_TOO_BIG', 'DEVICE_UPDATE', [sprintf('%sMB', $maxMb)]));
-        }
-        if (in_array($_FILES['new_firmware']['type'], ['application/gzip', 'application/x-gzip'])) {
-            $ext = 'bin.gz';
-        } elseif (in_array($_FILES['new_firmware']['type'], ['application/octet-stream', 'application/macbinary'])) {
-            $ext = 'bin';
-        } else {
-            throw new RuntimeException(
-                __('UPLOAD_FIRMWARE_FULL_WRONG_FORMAT', 'DEVICE_UPDATE', [$_FILES['new_firmware']['type']])
-            );
-        }
-
-        $new_firmware_path = $firmwarefolder.'OpenBeken.'.$ext;
-
-        if (!move_uploaded_file(
-            $_FILES['new_firmware']['tmp_name'],
-            $new_firmware_path
-        )) {
-            throw new RuntimeException(__('UPLOAD_FIRMWARE_FULL_COULD_NOT_SAVE', 'DEVICE_UPDATE'));
-        }
-
-        $messages[] = __('UPLOAD_FIRMWARE_FULL_LABEL', 'DEVICE_UPDATE').': '.__(
-            'UPLOAD_FIRMWARE_FULL_SUCCESSFULLY',
-            'DEVICE_UPDATE'
-        );
-        $targetVersion = FirmwareVersionExtractor::fromFilename($_FILES['new_firmware']['name']) ?? '';
-    } catch (RuntimeException $e) {
-        $errors[] = __('UPLOAD_FIRMWARE_FULL_LABEL', 'DEVICE_UPDATE').': '.$e->getMessage().'!';
-    }
-} elseif (isset($_REQUEST['auto'])) {
-    $client = GuzzleFactory::getClient($Config);
-    $OpenBekenHelper = new OpenBekenHelper(
-        new GithubFlavoredMarkdownConverter(),
-        $client,
-        new OpenBekenOtaScraper($Config->read('auto_update_channel'), $client),
-        $Config->read('auto_update_channel')
-    );
-
-    if (!empty($_REQUEST['update_automatic_lang'])) {
-        $Config->write('update_automatic_lang', strtoupper(trim($_REQUEST['update_automatic_lang'])));
-    }
-
-    $firmwareDownloader = new FirmwareDownloader(GuzzleFactory::getClient($Config), $firmwarefolder);
-
-    try {
-        $platform = strtoupper(trim($Config->read('update_automatic_lang')));
-        if ('' === $platform) {
-            throw new RuntimeException(__('MSG_SET_AUTOMATIC_LANG_FIRST', 'DEVICE_UPDATE'));
-        }
-
-        $result = $OpenBekenHelper->getLatestFirmwares($platform);
-        $new_firmware_path = $firmwareDownloader->download($result->getFirmwareUrl());
-        $targetVersion = $result->getTagName();
-        $updateTargets[$platform] = [
-            'minimalFirmwarePath' => '',
-            'newFirmwarePath' => $new_firmware_path,
-            'targetVersion' => $targetVersion,
-            'source' => 'automatic',
-            'platform' => $platform,
-        ];
-        $messages[] = 'OTA Update: '.$platform.' | '.__('VERSION', 'DEVICE_UPDATE').': '.$result->getTagName().' | '.__('DATE', 'DEVICE_UPDATE').' '.$result->getPublishedAt()->format('Y-m-d');
-
-        if (!empty($updateTargets)) {
-            $messages[] = __('AUTO_SUCCESSFULL_DOWNLOADED', 'DEVICE_UPDATE').'<br/>';
-        }
-    } catch (Throwable $e) {
-        $errors[] = __('AUTO_ERROR_DOWNLOAD', 'DEVICE_UPDATE').'<br/>'.$e->getMessage();
-    }
-} else {
-    $errors[] = __('UPLOAD_PLEASE_UPLOAD_FIRMWARE', 'DEVICE_UPDATE').'<br/>';
-}
-
-$ota_server_ip = $_REQUEST['ota_server_ip'] ?? '';
-$ota_server_port = $_REQUEST['ota_server_port'] ?? '';
-
-$Config->write('ota_server_ip', $ota_server_ip);
-$Config->write('ota_server_port', $ota_server_port);
-
+$ota_server_ip = trim((string) ($_REQUEST['ota_server_ip'] ?? ''));
+$ota_server_port = trim((string) ($_REQUEST['ota_server_port'] ?? ''));
+if ($ota_server_ip !== '') $Config->write('ota_server_ip', $ota_server_ip);
+if ($ota_server_port !== '') $Config->write('ota_server_port', $ota_server_port);
 $otaHelper = new OtaHelper($Config, _BASEURL_);
 
-if (!isset($_REQUEST['auto']) && !empty($new_firmware_path)) {
-    $updateTargets['default'] = [
-        'minimalOtaUrl' => !empty($minimal_firmware_path)
-            ? $otaHelper->getFirmwareUrl($minimal_firmware_path)
-            : '',
-        'otaUrl' => $otaHelper->getFirmwareUrl($new_firmware_path),
-        'targetVersion' => $targetVersion,
-        'source' => 'manual',
+if (isset($_REQUEST['auto'])) {
+    // Do not call GitHub here. The chipset(s) are not known until the user
+    // chooses devices. device_update.php resolves every required chipset from
+    // one cached OpenBeken release request after selection.
+    $updateTargets['automatic'] = [
+        'minimalOtaUrl' => '',
+        'otaUrl' => '',
+        'targetVersion' => '',
+        'source' => 'automatic',
+        'platform' => 'AUTO',
     ];
-}
-
-foreach ($updateTargets as $platform => $updateTarget) {
-    if (!isset($updateTarget['newFirmwarePath'])) {
-        continue;
-    }
-
-    $updateTargets[$platform] = [
-        'minimalOtaUrl' => !empty($updateTarget['minimalFirmwarePath'] ?? '')
-            ? $otaHelper->getFirmwareUrl($updateTarget['minimalFirmwarePath'])
-            : '',
-        'otaUrl' => $otaHelper->getFirmwareUrl($updateTarget['newFirmwarePath']),
-        'targetVersion' => $updateTarget['targetVersion'],
-        'source' => $updateTarget['source'] ?? 'automatic',
-    ];
-}
-$firmwareChecker = new FirmwareChecker(GuzzleFactory::getClient($Config));
-
-$checkForFirmware = '1' === $Config->read('update_be_check');
-
-if ($checkForFirmware) {
-    $validatedUrls = [];
-    foreach ($updateTargets as $updateTarget) {
-        foreach ([
-            'minimalOtaUrl' => __('UPLOAD_FIRMWARE_MINIMAL_LABEL', 'DEVICE_UPDATE'),
-            'otaUrl' => __('UPLOAD_FIRMWARE_FULL_LABEL', 'DEVICE_UPDATE'),
-        ] as $field => $label) {
-            $otaUrl = $updateTarget[$field] ?? '';
-            if ('' === $otaUrl || in_array($otaUrl, $validatedUrls, true)) {
-                continue;
-            }
-
-            $validatedUrls[] = $otaUrl;
-            if (!$firmwareChecker->isValid($otaUrl)) {
-                $errors[] = __('FIRMWARE_NOT_ACCESSIBLE', 'DEVICE_UPDATE', [
-                    $label,
-                    $otaUrl,
-                ]).'<br>'.__('FIRMWARE_NOT_ACCESSIBLE_HELP', 'DEVICE_UPDATE');
-            }
+    $messages[] = 'Official OpenBeken release selected. Choose the devices below; chipset and firmware will be resolved automatically.';
+} elseif (isset($_REQUEST['upload'])) {
+    try {
+        if (!isset($_FILES['new_firmware']) || !is_array($_FILES['new_firmware'])) {
+            throw new RuntimeException('No firmware file was received.');
         }
+        if (UPLOAD_ERR_OK !== (int) ($_FILES['new_firmware']['error'] ?? UPLOAD_ERR_NO_FILE)) {
+            throw new RuntimeException('Firmware upload failed (code '.(int) $_FILES['new_firmware']['error'].').');
+        }
+        if ((int) $_FILES['new_firmware']['size'] > 5 * 1024 * 1024) {
+            throw new RuntimeException('Firmware file is larger than 5 MB.');
+        }
+        $originalName = basename((string) $_FILES['new_firmware']['name']);
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        if (!in_array($extension, ['rbl', 'bin', 'img'], true)) {
+            throw new RuntimeException('Unsupported firmware format. Use .rbl, .bin or .img.');
+        }
+        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $originalName);
+        $newFirmwarePath = $firmwarefolder.$safeName;
+        if (!move_uploaded_file($_FILES['new_firmware']['tmp_name'], $newFirmwarePath)) {
+            throw new RuntimeException('Could not save the uploaded firmware.');
+        }
+        $targetVersion = FirmwareVersionExtractor::fromFilename($originalName) ?? '';
+        $updateTargets['default'] = [
+            'minimalOtaUrl' => '',
+            'otaUrl' => $otaHelper->getFirmwareUrl($newFirmwarePath),
+            'targetVersion' => $targetVersion,
+            'source' => 'manual',
+            'platform' => 'LOCAL',
+        ];
+        $messages[] = 'Local firmware uploaded successfully: '.htmlspecialchars($originalName, ENT_QUOTES, 'UTF-8');
+    } catch (Throwable $e) {
+        $errors[] = $e->getMessage();
     }
+} else {
+    $errors[] = __('UPLOAD_PLEASE_UPLOAD_FIRMWARE', 'DEVICE_UPDATE');
 }
 
+$devices = $OpenBeken->getDevices();
+$disabledDeviceIds = array_map(static fn (Device $device) => $device->id, array_filter($devices, static fn (Device $device) => !$device->isUpdatable));
 ?>
-
 <div class='row justify-content-sm-center update-page firmware-upload-page'>
-	<div class='col col-12 col-xl-10'>
-		<h2 class='text-sm-center mb-4'>
-			<?php echo $title; ?>
-		</h2>
+<div class='col col-12 col-xl-10'>
+<h2 class='text-sm-center mb-4'><?php echo $title; ?></h2>
 <?php if (!empty($errors)) { ?>
-		<div class="alert alert-danger fade show mb-4" role="alert">
-			<?php echo implode('<br/>', $errors); ?>
-		</div>
+<div class="alert alert-danger fade show mb-4" role="alert"><?php echo implode('<br/>', array_map(static fn ($e) => htmlspecialchars((string) $e, ENT_QUOTES, 'UTF-8'), $errors)); ?></div>
 <?php } else { ?>
-    <?php if (!empty($messages)) { ?>
-		<div class="alert alert-success fade show mb-4" role="alert">
-			<?php echo implode('<br/>', $messages); ?>
-		</div>
-    <?php } ?>
-
-	<?php
-
-    $devices = $OpenBeken->getDevices();
-    $disabledDeviceIds = array_map(function (Device $device) {
-        return $device->id;
-    }, array_filter($devices, function (Device $device) {
-        return !$device->isUpdatable;
-    }));
-
-    ?>
-	<?php if (isset($_REQUEST['auto'])) { ?>
-		<div class="alert alert-warning fade show mb-4" data-bs-dismiss="alert" role="alert">
-			<?php echo __('AUTO_WARNING_CFG_HOLDER', 'DEVICE_UPDATE'); ?>
-		</div>
-	<?php } ?>
-		<div class='card update-card update-selection-card mb-4'>
-			<div class='card-body'>
-				<div class='mb-4 text-center'>
-					<h3 class='mb-0'>
-						<?php echo __('CHOOSE_DEVICES_TO_UPDATE', 'DEVICE_UPDATE'); ?>
-					</h3>
-				</div>
-				<form name='update_devices'
-					  class='update-device-form'
-					  id='update_devices'
-					  method='post'
-					  action='<?php echo _BASEURL_; ?>device_update'
-				>
-					<input type='hidden' name='update_targets' value='<?php echo htmlspecialchars(json_encode($updateTargets), ENT_QUOTES); ?>'>
-
-					<div class='row g-3 update-toolbar mb-4'>
-						<div class='col col-12 col-md-auto'>
-							<button type='submit' class='btn btn-success w-100' name='submit' value='submit'>
-								<?php echo __('BTN_START_UPDATE', 'DEVICE_UPDATE'); ?>
-							</button>
-						</div>
-						<div class='col col-12 col-md-auto'>
-							<div class="form-check ps-0 mb-0">
-								<input type="checkbox"
-									   class="form-check-input showmore d-none"
-									   id="showmore_top"
-									   name='showmore'
-								>
-								<label class="form-check-label btn btn-secondary w-100" for="showmore_top">
-									<?php echo __('SHOW_MORE', 'DEVICES'); ?>
-								</label>
-							</div>
-						</div>
-						<?php if (1 == $Config->read('show_search')) { ?>
-							<div class="col col-12 col-lg">
-								<div class="input-group device-search-group">
-									<input type="text"
-										   name="searchterm"
-										   class='form-control device-search has-clearer'
-										   placeholder="<?php echo __('FILTER', 'DEVICES'); ?>"
-									>
-									<div class="input-group-text">
-										<span class="input-group-text">
-											<i class="fas fa-search"></i>
-										</span>
-									</div>
-								</div>
-							</div>
-						<?php } ?>
-					</div>
-					<div class='row justify-content-center'>
-						<div class='col'>
-							<div class='table-responsive double-scroll update-table-wrap'>
-                            <?php
-                            $deviceLinks = true;
-    $deviceLinkActionText = __('UPDATE', 'DEVICE_UPDATE');
-
-    include 'elements/devices_table.php';
-    ?>
-							</div>
-						</div>
-					</div>
-
-					<div class='row g-3 update-actions-row mt-2'>
-						<div class='col col-12 col-md-auto'>
-							<button type='submit' class='btn btn-success w-100' name='submit' value='submit'>
-								<?php echo __('BTN_START_UPDATE', 'DEVICE_UPDATE'); ?>
-							</button>
-						</div>
-						<div class='col col-12 col-md-auto'>
-							<div class="form-check ps-0 mb-0">
-								<input type="checkbox"
-									   class="form-check-input showmore d-none"
-									   id="showmore_bottom"
-									   name='showmore'
-								>
-								<label class="form-check-label btn btn-secondary w-100" for="showmore_bottom">
-									<?php echo __('SHOW_MORE', 'DEVICES'); ?>
-								</label>
-							</div>
-						</div>
-					</div>
-				</form>
-			</div>
-		</div>
-	<script src="<?php echo $urlHelper->js('compiled/devices'); ?>"></script>
-<?php } ?>
+<?php if (!empty($messages)) { ?><div class="alert alert-success fade show mb-4" role="alert"><?php echo implode('<br/>', $messages); ?></div><?php } ?>
+<?php if (isset($_REQUEST['auto'])) { ?><div class="alert alert-warning fade show mb-4" role="alert"><?php echo __('AUTO_WARNING_CFG_HOLDER', 'DEVICE_UPDATE'); ?></div><?php } ?>
+<div class='card update-card update-selection-card mb-4'><div class='card-body'>
+<div class='mb-4 text-center'><h3 class='mb-0'><?php echo __('CHOOSE_DEVICES_TO_UPDATE', 'DEVICE_UPDATE'); ?></h3></div>
+<form name='update_devices' class='update-device-form' id='update_devices' method='post' action='<?php echo _BASEURL_; ?>device_update'>
+<input type='hidden' name='update_targets' value='<?php echo htmlspecialchars(json_encode($updateTargets), ENT_QUOTES, 'UTF-8'); ?>'>
+<div class='row g-3 update-toolbar mb-4'>
+<div class='col col-12 col-md-auto'><button type='submit' class='btn btn-success w-100' name='submit' value='submit'><?php echo __('BTN_START_UPDATE', 'DEVICE_UPDATE'); ?></button></div>
+<div class='col col-12 col-md-auto'><div class="form-check ps-0 mb-0"><input type="checkbox" class="form-check-input showmore d-none" id="showmore_top" name='showmore'><label class="form-check-label btn btn-secondary w-100" for="showmore_top"><?php echo __('SHOW_MORE', 'DEVICES'); ?></label></div></div>
+<?php if (1 == $Config->read('show_search')) { ?><div class="col col-12 col-lg"><div class="input-group device-search-group"><input type="text" name="searchterm" class='form-control device-search has-clearer' placeholder="<?php echo __('FILTER', 'DEVICES'); ?>"><div class="input-group-text"><span class="input-group-text"><i class="fas fa-search"></i></span></div></div></div><?php } ?>
 </div>
+<div class='row justify-content-center'><div class='col'><div class='table-responsive double-scroll update-table-wrap'>
+<?php $deviceLinks = true; $deviceLinkActionText = __('UPDATE', 'DEVICE_UPDATE'); include 'elements/devices_table.php'; ?>
+</div></div></div>
+<div class='row g-3 update-actions-row mt-2'><div class='col col-12 col-md-auto'><button type='submit' class='btn btn-success w-100' name='submit' value='submit'><?php echo __('BTN_START_UPDATE', 'DEVICE_UPDATE'); ?></button></div></div>
+</form>
+</div></div>
+<?php } ?>
+</div></div>
+<script src="<?php echo $urlHelper->js('compiled/devices'); ?>"></script>
