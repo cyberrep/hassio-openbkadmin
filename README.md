@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.5.3**
+> Current add-on version: **0.5.4**
 
 ## Features
 
@@ -32,7 +32,7 @@ OpenBKAdmin can display IP address, Short Name, Full Name, chipset, firmware ver
 Firmware identification is separated into useful fields. For example, `OpenBK7231N_1.18.284` is displayed as chipset **BK7231N** and version **1.18.284**.
 
 ### Multi-channel devices
-Multi-channel OpenBeken devices can be represented as individual controllable outputs while sharing one physical device/IP. OpenBKAdmin reuses information obtained from the physical device instead of querying the same IP separately for every channel.
+Multi-channel OpenBeken devices can be represented as individual controllable outputs while sharing one physical device/IP. OpenBKAdmin reuses physical-device information for rows that share the same IP. Starting with 0.5.4, individual output state is read from the native OpenBeken channel value so one channel does not incorrectly copy another channel's ON/OFF state.
 
 ### Network Auto Scan
 Auto Scan supports configurable IP ranges and ports and validates discovered OpenBeken endpoints. Version 0.5.1 added a more tolerant two-pass network probe and an OpenBeken-native discovery fallback using `/obkdevicelist`, the HTTP peer list exposed by the firmware SSDP `obkDeviceList` implementation.
@@ -62,7 +62,8 @@ OpenBKAdmin firmware management is designed specifically around **OpenBeken**:
 - Updates multiple selected devices, resolving the correct OTA image independently per chipset
 - Revalidates the chipset immediately before preparing an automatic firmware update
 - Blocks automatic flashing when a compatible chipset/OTA target cannot be resolved safely
-- Uses device Full Name in the firmware update workflow when available
+- Shows the selected device Full Name, chipset and IP before execution
+- Uses one OpenBeken release metadata lookup for all selected chipsets and caches release metadata to reduce GitHub API requests/rate-limit failures
 - Uses the OpenBeken OTA command flow: `OtaUrl <url>` followed by `Upgrade 1`
 
 Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/releases
@@ -111,6 +112,14 @@ hassio-openbkadmin/
 ## Changelog
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
+
+### 0.5.4
+- Correct native per-channel ON/OFF state for multi-channel OpenBeken devices
+- Official OTA lookup moved until after device selection
+- One GitHub release metadata lookup handles all selected chipsets
+- 15-minute OpenBeken release cache with rate-limit fallback
+- Selected-device summary shown before OTA execution
+- OpenBKAdmin navbar logo/favicons corrected
 
 ### 0.5.3
 - Automatic chipset detection in the Official OpenBeken Release workflow
