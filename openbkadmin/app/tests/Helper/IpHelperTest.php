@@ -1,0 +1,146 @@
+<?php
+
+namespace Tests\OpenBKAdmin\Helper;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+use OpenBKAdmin\Helper\IpHelper;
+
+class IpHelperTest extends TestCase
+{
+    public function testFetchIps(): void
+    {
+        $ipHelper = new IpHelper();
+        $ips = $ipHelper->fetchIps('127.0.0.1', '127.0.0.3');
+
+        self::assertCount(3, $ips);
+    }
+
+    public function testFetchIpsMultipleSubnet(): void
+    {
+        $ipHelper = new IpHelper();
+        $ips = $ipHelper->fetchIps('127.0.0.128', '127.0.1.2');
+
+        self::assertCount(131, $ips);
+        self::assertEquals('127.0.0.128', $ips[0]);
+        self::assertEquals('127.0.1.2', end($ips));
+    }
+
+    public function testFetchIpsTooLargeRange(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $ipHelper = new IpHelper();
+        $ipHelper->fetchIps('127.0.0.1', '127.255.8.2');
+    }
+
+    public function testFetchIpsSingleIp(): void
+    {
+        $ipHelper = new IpHelper();
+        $ips = $ipHelper->fetchIps('127.0.0.1', '127.0.0.1');
+
+        self::assertCount(1, $ips);
+        self::assertEquals('127.0.0.1', $ips[0]);
+    }
+
+    public function testFetchIpsSkipped(): void
+    {
+        $ipHelper = new IpHelper();
+        $ips = $ipHelper->fetchIps('127.0.0.1', '127.0.0.4', ['127.0.0.1']);
+
+        self::assertCount(3, $ips);
+        self::assertNotContains('127.0.0.1', $ips);
+    }
+
+    public function testFetchIpsForRanges(): void
+    {
+        $ipHelper = new IpHelper();
+        $ips = $ipHelper->fetchIpsForRanges([
+            '127.0.0.1-127.0.0.2',
+            '127.0.1.5',
+        ]);
+
+        self::assertSame([
+            '127.0.0.1',
+            '127.0.0.2',
+            '127.0.1.5',
+        ], $ips);
+    }
+
+    public function testFetchIpsForRangesSkipsExcludedAndDuplicateAddresses(): void
+    {
+        $ipHelper = new IpHelper();
+        $ips = $ipHelper->fetchIpsForRanges([
+            '127.0.0.1-127.0.0.2',
+            '127.0.0.2-127.0.0.3',
+        ], ['127.0.0.1']);
+
+        self::assertSame([
+            '127.0.0.2',
+            '127.0.0.3',
+        ], $ips);
+    }
+
+    public function testFetchIpsForRangesRejectsInvalidSyntax(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $ipHelper = new IpHelper();
+        $ipHelper->fetchIpsForRanges(['127.0.0.1:127.0.0.2']);
+    }
+
+    public function testFetchIpsForRangesTrimsWhitespaceAndSkipsEmptyEntries(): void
+    {
+        $ipHelper = new IpHelper();
+        $ips = $ipHelper->fetchIpsForRanges([
+            ' 127.0.0.1 - 127.0.0.2 ',
+            '   ',
+            "\t127.0.0.3\t",
+        ]);
+
+        self::assertSame([
+            '127.0.0.1',
+            '127.0.0.2',
+            '127.0.0.3',
+        ], $ips);
+    }
+
+    public function testFetchIpsForRangesRejectsRangeExpressionsWithTooManyParts(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $ipHelper = new IpHelper();
+        $ipHelper->fetchIpsForRanges(['127.0.0.1-127.0.0.2-127.0.0.3']);
+    }
+
+    public function testFetchIpsForRangesRejectsCombinedUniqueResultSetAboveLimit(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $ipHelper = new IpHelper();
+        $ipHelper->fetchIpsForRanges([
+            '127.0.0.1-127.0.4.0',
+            '127.0.4.1',
+        ]);
+    }
+
+    #[DataProvider('provideInvalidIps')]
+    public function testFetchIpsInvalidFromIp(string $invalidIp): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $ipHelper = new IpHelper();
+        $ipHelper->fetchIps($invalidIp, '127.0.0.4');
+    }
+
+    #[DataProvider('provideInvalidIps')]
+    public function testFetchIpsInvalidToIp(string $invalidIp): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $ipHelper = new IpHelper();
+        $ipHelper->fetchIps('127.0.0.1', $invalidIp);
+    }
+
+    public static function provideInvalidIps(): array
+    {
+        return [
+            ['foo'],
+            ['127.0.0,1'],
+        ];
+    }
+}

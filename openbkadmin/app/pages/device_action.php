@@ -1,0 +1,578 @@
+<?php
+
+use OpenBKAdmin\Device;
+use OpenBKAdmin\DeviceFactory;
+use OpenBKAdmin\DeviceRepository;
+use OpenBKAdmin\OpenBeken;
+
+function normalizeDeviceNames($values): array
+{
+    if (!is_array($values)) {
+        return [];
+    }
+
+    return array_values(
+        array_filter(
+            array_map(static fn ($value): string => trim((string) $value), $values),
+            static fn (string $value): bool => '' !== $value
+        )
+    );
+}
+
+function hasReachableStatus($status): bool
+{
+    return $status instanceof stdClass && !empty((array) $status) && !isset($status->ERROR);
+}
+
+function hasStatusError($status): bool
+{
+    return $status instanceof stdClass && isset($status->ERROR) && '' !== $status->ERROR;
+}
+
+function getFriendlyNamesFromStatus($status): array
+{
+    if (!hasReachableStatus($status) || !isset($status->Status)) {
+        return [];
+    }
+
+    $friendlyNameSource = $status->Status->FriendlyName ?? [];
+    if (!is_array($friendlyNameSource)) {
+        $friendlyNameSource = [$friendlyNameSource];
+    }
+
+    $friendlyNames = normalizeDeviceNames($friendlyNameSource);
+    if ([] === $friendlyNames) {
+        return [];
+    }
+
+    $channelCount = 0;
+    if (isset($status->StatusSTS->POWER)) {
+        $channelCount = 1;
+    } else {
+        for ($i = 1; isset($status->StatusSTS->{'POWER'.$i}); ++$i) {
+            ++$channelCount;
+        }
+    }
+
+    if (0 === $channelCount) {
+        $channelCount = count($friendlyNames);
+    }
+
+    $resolvedFriendlyNames = [];
+    for ($i = 0; $i < max($channelCount, 1); ++$i) {
+        $resolvedFriendlyNames[] = $friendlyNames[$i] ?? trim(($friendlyNames[0] ?? '').' '.($i + 1));
+    }
+
+    return normalizeDeviceNames($resolvedFriendlyNames);
+}
+
+function getDeviceNameState(?Device $device, $status, array $request): array
+{
+    $deviceNames = normalizeDeviceNames($request['device_name'] ?? []);
+    if ([] === $deviceNames && $device instanceof Device) {
+        $deviceNames = normalizeDeviceNames($device->names);
+    }
+
+    $friendlyNames = normalizeDeviceNames($request['device_friendly_name'] ?? []);
+    if ([] === $friendlyNames) {
+        $friendlyNames = getFriendlyNamesFromStatus($status);
+    }
+    if ([] === $friendlyNames && $device instanceof Device) {
+        $friendlyNames = normalizeDeviceNames($device->getFriendlyNames());
+    }
+
+    if ([] === $deviceNames) {
+        $deviceNames = $friendlyNames;
+    }
+    if ([] === $friendlyNames) {
+        $friendlyNames = $deviceNames;
+    }
+
+    $nameCount = max(count($deviceNames), count($friendlyNames), 1);
+    for ($i = 0; $i < $nameCount; ++$i) {
+        $deviceNames[$i] ??= $friendlyNames[$i] ?? '';
+        $friendlyNames[$i] ??= $deviceNames[$i] ?? '';
+    }
+
+    return [array_values($deviceNames), array_values($friendlyNames)];
+}
+
+$status = null;
+$device = null;
+$msg = null;
+
+$OpenBeken = $container->get(OpenBeken::class);
+$deviceRepository = $container->get(DeviceRepository::class);
+
+if ('edit' == $action) {
+    $device = $deviceRepository->getDeviceById((int) $device_id);
+
+    if ($device instanceof Device) {
+        $status = $OpenBeken->getOpenBekenStatus($device);
+        if (hasStatusError($status)) {
+            $msg = __('MSG_DEVICE_NOT_FOUND', 'DEVICE_ACTIONS').'<br/>';
+            $msg .= $status->ERROR.'<br/>';
+        }
+    }
+} elseif ('delete' == $action) {
+    $deviceRepository->removeDevice((int) $device_id);
+    $msg = __('MSG_DEVICE_DELETE_DONE', 'DEVICE_ACTIONS');
+    $action = 'done';
+}
+
+if (!empty($_POST)) {
+    if (isset($_REQUEST['search'])) {
+        $deviceIp = trim((string) ($_REQUEST['device_ip'] ?? ''));
+
+        if ('' === $deviceIp) {
+            $msg = __('ERROR_PLEASE_ENTER_DEVICE_IP', 'DEVICE_ACTIONS');
+        } else {
+            if (!($device instanceof Device) && !empty($_REQUEST['device_id'])) {
+                $device = $deviceRepository->getDeviceById((int) $_REQUEST['device_id']);
+            }
+
+            if (!$device instanceof Device) {
+                $device = DeviceFactory::fakeDevice(
+                    $deviceIp,
+                    (int) ($_REQUEST['device_port'] ?? Device::DEFAULT_PORT),
+                    (string) ($_REQUEST['device_username'] ?? ''),
+                    (string) ($_REQUEST['device_password'] ?? '')
+                );
+            }
+
+            $device->ip = $deviceIp;
+            $device->port = (int) ($_REQUEST['device_port'] ?? Device::DEFAULT_PORT);
+            $device->username = (string) ($_REQUEST['device_username'] ?? '');
+            $device->password = (string) ($_REQUEST['device_password'] ?? '');
+
+            if (!$OpenBeken->isOpenBeken($device)) {
+                $status = new \stdClass();
+                $status->ERROR = __('ERROR_NOT_OPENBEKEN', 'DEVICE_ACTIONS');
+                $msg = __('MSG_DEVICE_NOT_FOUND', 'DEVICE_ACTIONS').'<br/>';
+                $msg .= $status->ERROR.'<br/>';
+            } else {
+                $status = $OpenBeken->getOpenBekenStatus($device);
+                if (hasStatusError($status)) {
+                    $msg = __('MSG_DEVICE_NOT_FOUND', 'DEVICE_ACTIONS').'<br/>';
+                    $msg .= $status->ERROR.'<br/>';
+                }
+            }
+        }
+    } elseif (!empty($_REQUEST['device_id'])) {
+        $existingDevice = $deviceRepository->getDeviceById((int) $_REQUEST['device_id']);
+        $device = DeviceFactory::fromRequest($_REQUEST);
+
+        // Persist names in the OpenBeken itself, not only in OpenBKAdmin.
+        // The first name is the device Full/Friendly Name. Additional names
+        // are written as channel labels when present.
+        $remoteErrors = [];
+        if ($existingDevice instanceof Device) {
+            $existingDevice->ip = $device->ip;
+            $existingDevice->port = $device->port;
+            $existingDevice->username = $device->username;
+            $existingDevice->password = $device->password;
+
+            $postedNames = normalizeDeviceNames($_REQUEST['device_name'] ?? []);
+            if (!empty($postedNames[0])) {
+                $remoteResult = $OpenBeken->doAjax((int) $existingDevice->id, 'FriendlyName '.trim($postedNames[0]));
+                if (isset($remoteResult->ERROR)) {
+                    $remoteErrors[] = 'FriendlyName: '.$remoteResult->ERROR;
+                }
+            }
+            foreach ($postedNames as $index => $postedName) {
+                if (count($postedNames) <= 1) {
+                    break;
+                }
+                $remoteResult = $OpenBeken->doAjax(
+                    (int) $existingDevice->id,
+                    'SetChannelLabel '.($index + 1).' '.trim($postedName)
+                );
+                if (isset($remoteResult->ERROR)) {
+                    $remoteErrors[] = 'Channel '.($index + 1).': '.$remoteResult->ERROR;
+                }
+            }
+        }
+
+        $deviceRepository->updateDevice($device);
+        $msg = __('MSG_DEVICE_EDIT_DONE', 'DEVICE_ACTIONS');
+        if ([] !== $remoteErrors) {
+            $msg .= '<br><small>OpenBeken: '.htmlspecialchars(implode(' | ', $remoteErrors), ENT_QUOTES, 'UTF-8').'</small>';
+        }
+        $action = 'done';
+    } else {
+        $deviceRepository->addDevice($_REQUEST);
+        $msg = __('MSG_DEVICE_ADD_DONE', 'DEVICE_ACTIONS');
+        $action = 'done';
+    }
+}
+
+[$deviceNames, $friendlyNames] = getDeviceNameState($device, $status, $_REQUEST);
+$showDeviceFields = ('edit' == $action && $device instanceof Device) || hasReachableStatus($status);
+$canSave = ('edit' == $action && $device instanceof Device) || hasReachableStatus($status);
+$openBekenFullName = trim((string) ($status->OpenBeken->FriendlyName ?? ''));
+$deviceConfirmToggle = array_key_exists('device_confirm_toggle', $_REQUEST)
+    ? '1' === (string) $_REQUEST['device_confirm_toggle']
+    : (($device instanceof Device) ? $device->deviceConfirmToggle : ('1' === $Config->read('confirm_device_toggles')));
+?>
+<div class='row justify-content-sm-center'>
+	<div class='col col-12 col-md-8 col-xl-6'>
+		<h2 class='text-sm-center mb-5'>
+			<?php echo $title; ?>
+		</h2>
+		<?php if (hasStatusError($status)) { ?>
+			<div class="alert alert-danger alert-dismissible fade show mb-5" data-bs-dismiss="alert" role="alert">
+				<p><?php echo __('MSG_DEVICE_NOT_FOUND', 'DEVICE_ACTIONS'); ?></p>
+				<p><?php echo $status->ERROR; ?></p>
+				<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+			</div>
+		<?php } elseif (null !== $msg && '' !== $msg && 'done' !== $action) { ?>
+			<div class="alert alert-danger alert-dismissible fade show mb-5" data-bs-dismiss="alert" role="alert">
+				<p><?php echo $msg; ?></p>
+				<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+			</div>
+		<?php } elseif ('done' !== $action && hasReachableStatus($status) && isset($status->WARNING) && '' !== $status->WARNING) { ?>
+			<div class="alert alert-warning alert-dismissible fade show mb-5" data-bs-dismiss="alert" role="alert">
+				<p><?php echo __('MSG_DEVICE_FOUND', 'DEVICE_ACTIONS'); ?></p>
+				<p><?php echo $status->WARNING; ?></p>
+				<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+			</div>
+		<?php } elseif ('done' !== $action && hasReachableStatus($status)) { ?>
+			<div class="alert alert-success alert-dismissible fade show my-5" data-bs-dismiss="alert" role="alert">
+				<?php echo __('MSG_DEVICE_FOUND', 'DEVICE_ACTIONS'); ?>
+				<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+			</div>
+		<?php } ?>
+		<?php if ('done' == $action) { ?>
+			<div class="alert alert-success fade show mb-5" role="alert">
+				<div class="col col-12 text-start">
+					<?php echo $msg; ?>
+				</div>
+				<div class="col col-12 text-start mt-3">
+					<a class="btn btn-secondary col-12 col-sm-auto" href='<?php echo _BASEURL_; ?>devices'>
+						<?php echo __('BTN_BACK', 'DEVICE_ACTIONS'); ?>
+					</a>
+				</div>
+			</div>
+		<?php } ?>
+		<?php if ('add' == $action || 'edit' == $action) { ?>
+			<?php if (isset($device->id)) { ?>
+				<h3 class='text-sm-center mb-5'>
+					<?php echo __('DEVICE', 'DEVICE_CONFIG'); ?> <?php echo $device->id; ?>
+                    <?php
+                    $obkFullName = $status->OpenBeken->FriendlyName ?? '';
+                    if ('' !== trim((string) $obkFullName)) {
+                        echo ' - '.htmlspecialchars($obkFullName, ENT_QUOTES, 'UTF-8');
+                    }
+                    ?>
+				</h3>
+			<?php } ?>
+
+			<form class='form'
+				  name='save_device'
+				  method='post'
+				  action='<?php echo _BASEURL_; ?>device_action/<?php echo $action; ?><?php echo isset($device->id) ? '/'.$device->id : ''; ?>'
+			>
+				<input type='hidden' name='device_id' value='<?php echo $device->id ?? ''; ?>'>
+
+				<div class="row g-3">
+					<div class="form-group col col-12 col-sm-6">
+						<label for="device_ip">
+							<?php echo __('DEVICE_IP', 'DEVICE_ACTIONS'); ?>
+						</label>
+						<input type="text"
+							   autofocus="autofocus"
+							   class="form-control"
+							   id="device_ip"
+							   name='device_ip'
+                               placeholder="<?php echo __('PLEASE_ENTER'); ?>"
+                               value='<?php echo isset($device->id) && !isset($_REQUEST['device_ip']) ? $device->ip : ($_REQUEST['device_ip'] ?? ''); ?>'
+                               required
+						>
+						<small id="device_ipHelp" class="text-muted">
+							<?php echo __('DEVICE_IP_HELP', 'DEVICE_ACTIONS'); ?>
+						</small>
+					</div>
+                    <div class="form-group col col-12 col-sm-3">
+                        <label for="device_port">
+                            <?php echo __('DEVICE_PORT', 'DEVICE_ACTIONS'); ?>
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               id="device_port"
+                               name='device_port'
+                               placeholder="<?php echo __('PLEASE_ENTER'); ?>"
+                               value='<?php echo isset($device->port) && !isset($_REQUEST['device_port']) ? $device->port : ($_REQUEST['device_port'] ?? Device::DEFAULT_PORT); ?>'
+                               required
+                        >
+                        <small id="device_portHelp" class="text-muted">
+							<?php echo __('DEVICE_PORT_HELP', 'DEVICE_ACTIONS'); ?>
+						</small>
+                    </div>
+					<div class="form-group col col-12 col-sm-3">
+						<label class="d-none d-sm-block">&nbsp;</label>
+						<button type='submit'
+								name='search'
+								value='search'
+								class='btn btn-primary col-12'
+						>
+							<?php echo __('BTN_SEARCH_DEVICE', 'DEVICE_ACTIONS'); ?>
+						</button>
+					</div>
+				</div>
+				<div class="form-group col">
+					<label for="device_username">
+						<?php echo __('DEVICE_USERNAME', 'DEVICE_ACTIONS'); ?>
+					</label>
+					<input id="username" style="display: none;" type="text" name="username"/>
+					<input id="password" style="display: none;" type="password" name="password"/>
+
+					<input type="text"
+						   autocomplete='off'
+						   autofill='off'
+						   class="form-control"
+						   id="device_username"
+						   name='device_username'
+						   value='<?php echo isset($device->id) && !isset($_REQUEST['device_username']) ? $device->username : ($_REQUEST['device_username'] ?? 'admin'); ?>'
+					>
+					<small id="device_usernameHelp" class="text-muted">
+						<?php echo __('DEVICE_USERNAME_HELP', 'DEVICE_ACTIONS'); ?>
+					</small>
+				</div>
+				<div class="form-group col">
+					<label for="device_password">
+						<?php echo __('DEVICE_PASSWORD', 'DEVICE_ACTIONS'); ?>
+					</label>
+					<input type="password"
+						   autocomplete='off'
+						   autofill='off'
+						   class="form-control"
+						   id="device_password"
+						   name='device_password'
+						   value='<?php echo isset($device->id) && !isset($_REQUEST['device_password']) ? $device->password : ($_REQUEST['device_password'] ?? ''); ?>'
+					>
+					<small id="device_passwordHelp" class="text-muted">
+						<?php echo __('DEVICE_PASSWORD_HELP', 'DEVICE_ACTIONS'); ?>
+					</small>
+				</div>
+				<div class="form-group col">
+					<label for="device_mqtt_topic">
+						<?php echo __('TOPIC', 'DEVICE_CONFIG'); ?>
+					</label>
+					<input type="text"
+						   class="form-control"
+						   id="device_mqtt_topic"
+						   name='device_mqtt_topic'
+						   value='<?php echo isset($device->mqttTopic) && !isset($_REQUEST['device_mqtt_topic'])
+                               ? htmlspecialchars($device->mqttTopic, ENT_QUOTES)
+                               : htmlspecialchars((string) ($_REQUEST['device_mqtt_topic'] ?? ''), ENT_QUOTES); ?>'
+					>
+					<small id="device_mqtt_topicHelp" class="text-muted">
+						<?php echo __('MQTT_DEVICE_TOPIC_HELP', 'DEVICE_ACTIONS'); ?>
+					</small>
+				</div>
+
+				<?php if ($showDeviceFields) { ?>
+                    <div class="form-group col">
+                        <label for="openbeken_full_name">Name</label>
+                        <input type="text" class="form-control" id="openbeken_full_name"
+                               value="<?php echo htmlspecialchars($openBekenFullName ?: '-', ENT_QUOTES, 'UTF-8'); ?>" readonly>
+                        <small class="form-text text-muted">OpenBeken Full Name</small>
+                    </div>
+					<div class="form-group col">
+						<label for="device_position">
+							<?php echo __('DEVICE_POSITION', 'DEVICE_ACTIONS'); ?>
+						</label>
+						<input type="text"
+							   class="form-control"
+							   id="device_position"
+							   name='device_position'
+							   value='<?php echo isset($device->position) && !isset($_REQUEST['device_position']) ? $device->position : ($_REQUEST['device_position'] ?? ''); ?>'
+						>
+						<small id="device_positionHelp" class="form-text text-muted">
+							<?php echo __('DEVICE_POSITION_HELP', 'DEVICE_ACTIONS'); ?>
+						</small>
+					</div>
+
+					<?php foreach ($deviceNames as $index => $deviceName) { ?>
+						<?php
+                        $friendlyName = $friendlyNames[$index] ?? '';
+                        $channelLabel = trim((string) $friendlyName);
+                        if ('' !== $openBekenFullName && '' !== $channelLabel
+                            && 0 !== stripos($channelLabel, $openBekenFullName.' - ')) {
+                            $friendlyName = $openBekenFullName.' - '.$channelLabel;
+                        }
+					    $channelNumber = $index + 1;
+                        $rawChannelName = trim((string) ($friendlyNames[$index] ?? ''));
+                        if ('' !== $openBekenFullName && 0 === stripos($rawChannelName, $openBekenFullName.' - ')) {
+                            $rawChannelName = trim(substr($rawChannelName, strlen($openBekenFullName.' - ')));
+                        }
+                        $nameLabel = __('DEVICE_NAME', 'DEVICE_ACTIONS').' '.$channelNumber
+                            .' - '.__('CHANNEL', 'DEVICE_ACTIONS').' '.$channelNumber;
+                        if ('' !== $rawChannelName) { $nameLabel .= ' - '.$rawChannelName; }
+					    ?>
+						<div class="row g-3 device-name-row">
+							<div class="form-group col col-12 col-sm-7">
+								<label for="device_name_<?php echo $index; ?>">
+									<?php echo $nameLabel; ?>
+								</label>
+								<input type="text"
+									   class="form-control OpenBKAdmin-name-input"
+									   id="device_name_<?php echo $index; ?>"
+									   name='device_name[<?php echo $index; ?>]'
+									   placeholder="<?php echo __('PLEASE_ENTER'); ?>"
+									   value='<?php echo htmlspecialchars($deviceName, ENT_QUOTES); ?>'
+									   required
+								>
+								<small class="form-text text-muted d-none d-sm-block">
+									&nbsp;
+								</small>
+							</div>
+							<div class="form-group col col-12 col-sm-5">
+								<label for="device_friendly_name_<?php echo $index; ?>">
+									Friendly Name
+								</label>
+								<div class="input-group">
+									<input type="text"
+										   class="form-control"
+										   id="device_friendly_name_<?php echo $index; ?>"
+										   value='<?php echo htmlspecialchars($rawChannelName, ENT_QUOTES); ?>'
+										   readonly
+									>
+									<input type='hidden'
+										   name='device_friendly_name[<?php echo $index; ?>]'
+										   value='<?php echo htmlspecialchars($rawChannelName, ENT_QUOTES); ?>'
+									>
+								</div>
+							</div>
+						</div>
+					<?php } ?>
+
+					<div class="row g-3">
+						<div class="form-group col col-12 col-sm-6 col-lg-4">
+							<div class="form-check mb-5">
+								<input type='hidden' name='device_all_off' value='0'>
+								<input class="form-check-input"
+									   type="checkbox"
+									   value="1"
+									   id="device_all_off"
+									   name='device_all_off' <?php echo $device->deviceAllOff ? 'checked="checked"' : ''; ?>>
+								<label class="form-check-label" for="device_all_off">
+									<?php echo __('LABEL_ALL_OFF', 'DEVICE_ACTIONS'); ?>
+								</label>
+							</div>
+						</div>
+						<div class="form-group col col-12 col-sm-6 col-lg-4">
+							<div class="form-check mb-5">
+								<input type='hidden' name='device_protect_on' value='0'>
+								<input class="form-check-input"
+									   type="checkbox"
+									   value="1"
+									   id="device_protect_on"
+									   name='device_protect_on' <?php echo $device->deviceProtectionOn ? 'checked="checked"' : ''; ?>>
+								<label class="form-check-label" for="device_protect_on">
+									<?php echo __('LABEL_PROTECT_ON', 'DEVICE_ACTIONS'); ?>
+								</label>
+							</div>
+						</div>
+						<div class="form-group col col-12 col-sm-6 col-lg-4">
+							<div class="form-check mb-5">
+								<input type='hidden' name='device_protect_off' value='0'>
+								<input class="form-check-input"
+									   type="checkbox"
+									   value="1"
+									   id="device_protect_off"
+									   name='device_protect_off' <?php echo $device->deviceProtectionOff ? 'checked="checked"' : ''; ?>>
+								<label class="form-check-label" for="device_protect_off">
+									<?php echo __('LABEL_PROTECT_OFF', 'DEVICE_ACTIONS'); ?>
+								</label>
+							</div>
+						</div>
+                        <div class="form-group col col-12 col-sm-6 col-lg-4">
+                            <div class="form-check mb-5">
+                                <input type='hidden' name='device_confirm_toggle' value='0'>
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       value="1"
+                                       id="device_confirm_toggle"
+                                       name='device_confirm_toggle' <?php echo $deviceConfirmToggle ? 'checked="checked"' : ''; ?>>
+                                <label class="form-check-label" for="device_confirm_toggle">
+                                    <?php echo __('LABEL_CONFIRM_DEVICE_TOGGLE', 'DEVICE_ACTIONS'); ?>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group col col-12 col-sm-6 col-lg-4">
+                            <div class="form-check mb-5">
+                                <input type='hidden' name='is_updatable' value='0'>
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       value="1"
+                                       id="is_updatable"
+                                       name='is_updatable' <?php echo $device->isUpdatable ? 'checked="checked"' : ''; ?>>
+                                <label class="form-check-label" for="is_updatable">
+                                    <?php echo __('LABEL_IS_UPDATABLE', 'DEVICE_ACTIONS'); ?>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group col col-12 col-sm-6 col-lg-4">
+                            <div class="form-check mb-5">
+                                <input type='hidden' name='device_hide_from_startpage' value='0'>
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       value="1"
+                                       id="device_hide_from_startpage"
+                                       name='device_hide_from_startpage' <?php echo $device->deviceHideFromStartpage ? 'checked="checked"' : ''; ?>>
+                                <label class="form-check-label" for="device_hide_from_startpage">
+                                    <?php echo __('LABEL_HIDE_FROM_STARTPAGE', 'DEVICE_ACTIONS'); ?>
+                                </label>
+                            </div>
+                        </div>
+					</div>
+				<?php } ?>
+
+				<div class="row">
+					<div class="col col-12 col-sm-6 text-start">
+						<a class="btn btn-secondary col-12 col-sm-auto" href='<?php echo _BASEURL_; ?>devices'>
+							<?php echo __('BTN_BACK', 'DEVICE_ACTIONS'); ?>
+						</a>
+					</div>
+					<div class="col col-12 col-sm-6 text-end">
+						<button type='submit'
+								name='submit'
+								value='<?php echo isset($device->id) ? 'edit' : 'add'; ?>'
+								class='btn btn-primary col-12 col-sm-auto'
+							<?php if (!$canSave) { ?>
+								disabled
+							<?php } ?>
+						>
+							<?php echo __('BTN_SAVE', 'DEVICE_ACTIONS'); ?>
+						</button>
+					</div>
+				</div>
+			</form>
+		<?php } ?>
+	</div>
+</div>
+<script>
+    $(document).ready(function()
+    {
+        const hideFromStartpageField = $("#device_hide_from_startpage");
+        const allOffField = $("#device_all_off");
+
+        $(".default-name").on("click", function (e)
+        {
+            e.preventDefault();
+            $(this)
+                .closest(".device-name-row")
+                .find(".OpenBKAdmin-name-input")
+                .val($(this).data("default-name").trim());
+        });
+
+        hideFromStartpageField.on("change", function ()
+        {
+            if ($(this).prop("checked"))
+            {
+                allOffField.prop("checked", false);
+            }
+        });
+    });
+</script>

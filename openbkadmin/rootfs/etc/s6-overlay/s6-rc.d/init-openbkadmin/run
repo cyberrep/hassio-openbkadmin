@@ -1,0 +1,23 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Home Assistant Community Add-on: TasmoAdmin
+# Configures TasmoAdmin
+# ==============================================================================
+
+# Ensure persistant storage exists
+if ! bashio::fs.directory_exists "/data/openbkadmin"; then
+    bashio::log.debug 'Data directory not initialized, doing that now...'
+
+    # Setup structure
+    cp -R /var/www/openbkadmin/data /data/openbkadmin
+fi
+
+# Ensure file permissions
+chown -R nginx:nginx /data/openbkadmin
+find /data/openbkadmin -not -perm 0644 -type f -exec chmod 0644 {} \;
+find /data/openbkadmin -not -perm 0755 -type d -exec chmod 0755 {} \;
+
+bashio::log.debug 'Symlinking data directory to persistent storage location...'
+rm -f -r /var/www/openbkadmin/data
+ln -s /data/openbkadmin /var/www/openbkadmin/data

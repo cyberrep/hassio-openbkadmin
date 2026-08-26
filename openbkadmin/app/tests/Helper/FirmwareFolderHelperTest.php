@@ -1,0 +1,49 @@
+<?php
+
+namespace Tests\OpenBKAdmin\Helper;
+
+use org\bovigo\vfs\vfsStream;
+use PHPUnit\Framework\TestCase;
+use OpenBKAdmin\Helper\FirmwareFolderHelper;
+
+class FirmwareFolderHelperTest extends TestCase
+{
+    public function testCleanEmpty(): void
+    {
+        $filesystem = vfsStream::setup('firmware');
+        FirmwareFolderHelper::clean($filesystem->url().'/');
+        self::assertEmpty($filesystem->getChildren());
+    }
+
+    public function testClean(): void
+    {
+        $filesystem = vfsStream::setup('firmware', null, ['firmware.bin' => 'contents']);
+        FirmwareFolderHelper::clean($filesystem->url().'/');
+        self::assertEmpty($filesystem->getChildren());
+    }
+
+    public function testCleanProtected(): void
+    {
+        $filesystem = vfsStream::setup('firmware', null, ['firmware.bin' => 'contents', '.empty' => '']);
+        FirmwareFolderHelper::clean($filesystem->url().'/');
+        self::assertCount(1, $filesystem->getChildren());
+    }
+
+    public function testCleanPreservesHtaccessAndNestedDirectories(): void
+    {
+        $filesystem = vfsStream::setup('firmware', null, [
+            'firmware.bin' => 'contents',
+            '.htaccess' => 'deny from all',
+            'nested' => [
+                'keep.txt' => 'keep',
+            ],
+        ]);
+
+        FirmwareFolderHelper::clean($filesystem->url().'/');
+
+        self::assertTrue($filesystem->hasChild('.htaccess'));
+        self::assertTrue($filesystem->hasChild('nested'));
+        self::assertFileExists($filesystem->url().'/nested/keep.txt');
+        self::assertFalse($filesystem->hasChild('firmware.bin'));
+    }
+}

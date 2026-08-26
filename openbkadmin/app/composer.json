@@ -1,0 +1,60 @@
+{
+    "name": "openbkadmin/openbkadmin",
+    "type": "project",
+    "license": "GPL3",
+    "require": {
+        "php": ">=8.2",
+        "ext-json": "*",
+        "ext-curl": "*",
+        "ext-openssl": "*",
+        "ext-zip": "*",
+        "ext-zlib": "*",
+        "ext-dom": "*",
+        "philipp15b/php-i18n": "^4.0",
+        "guzzlehttp/guzzle": "^7.0",
+        "symfony/filesystem": "^7.4",
+        "composer/semver": "^3.3",
+        "filp/whoops": "^2.14",
+        "selective/container": "^1",
+        "symfony/routing": "^7.4",
+        "symfony/http-foundation": "^7.4",
+        "symfony/browser-kit": "^7.4",
+        "symfony/http-client": "^7.4",
+        "symfony/css-selector": "^7.4",
+        "league/commonmark": "^2.6",
+        "php-mqtt/client": "^2.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenBKAdmin\\": "src/"
+        }
+    },
+    "require-dev": {
+        "roave/security-advisories": "dev-latest",
+        "phpunit/phpunit": "^11.0",
+        "mikey179/vfsstream": "^1.6",
+        "phpstan/phpstan": "^2.0",
+        "friendsofphp/php-cs-fixer": "^3.11",
+        "phpstan/phpstan-deprecation-rules": "^2.0"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\OpenBKAdmin\\": "tests/"
+        }
+    },
+    "config": {
+        "platform": {
+            "php": "8.2.30"
+        }
+    },
+    "scripts": {
+        "cs-fix": "php-cs-fixer fix",
+        "phpstan": "phpstan --memory-limit=1g",
+        "phpunit": "phpunit --display-deprecations",
+        "quality": [
+            "@cs-fix",
+            "@phpstan",
+            "@phpunit"
+        ]
+    }
+}
