@@ -1,5 +1,23 @@
 # OpenBKAdmin Changelog
 
+## [0.5.4] - 2026-08-26
+
+### Device state
+- Multi-channel OpenBeken devices now read their native channel values with `GetChannel` instead of trusting the shared Tasmota-compatible `Status 0` POWER state for every logical output.
+- Physical-device status is still shared by rows with the same IP; only the individual channel state is queried separately when required.
+
+### Firmware update
+- Official firmware is no longer queried from GitHub before the user selects devices.
+- The selected physical devices are checked first, their chipsets are detected, and all required OTA assets are resolved from a single OpenBeken release metadata lookup.
+- Added a 15-minute release metadata cache to avoid repeated GitHub API requests and unauthenticated rate-limit errors.
+- A previously successful cached release can be reused temporarily if GitHub returns a rate-limit/network error.
+- The selected-device list is displayed before OTA execution, including Full Name, detected chipset and IP for automatic updates.
+- Mixed-chipset selections continue to resolve the correct official OTA Update image independently for each chipset.
+
+### Branding
+- Updated the navigation logo wrapper to render the OpenBKAdmin icon directly and avoid the previously blank logo area.
+- NGINX now serves the OpenBKAdmin icon through the existing favicon paths and disables caching of the old favicon.
+
 ## [0.5.3] - 2026-08-26
 
 ### Firmware update safety
