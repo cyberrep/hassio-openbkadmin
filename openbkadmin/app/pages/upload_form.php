@@ -10,16 +10,14 @@ use OpenBKAdmin\Helper\OpenBekenOtaScraper;
 $OpenBekenHelper = new OpenBekenHelper(
     new GithubFlavoredMarkdownConverter(),
     GuzzleFactory::getClient($Config),
-    new OpenBekenOtaScraper($Config->read('auto_update_channel'), new HttpBrowser()),
+    new OpenBekenOtaScraper($Config->read('auto_update_channel'), GuzzleFactory::getClient($Config)),
     $Config->read('auto_update_channel')
 );
 $releaseNotes = $OpenBekenHelper->getReleaseNotes();
 $changelog = $OpenBekenHelper->getChangelog();
-$esp8266Releases = $OpenBekenHelper->getEsp8266Releases();
-$esp32Releases = $OpenBekenHelper->getEsp32Releases();
+$otaPlatforms = $OpenBekenHelper->getOtaPlatforms();
 
 $fwAsset = $Config->read('update_automatic_lang');
-$fwAssetEsp32 = $Config->read('update_automatic_lang_esp32');
 
 ?>
 <div class='row justify-content-sm-center upload-form-page'>
@@ -32,7 +30,7 @@ $fwAssetEsp32 = $Config->read('update_automatic_lang_esp32');
 				<p class="mb-2">
 					<?php echo __('UPLOAD_DESCRIPTION', 'DEVICE_UPDATE'); ?>
 				</p>
-				<a href='https://github.com/arendst/OpenBeken/releases' target='_blank'>OpenBeken Releases</a>
+				<a href='https://github.com/openshwprojects/OpenBK7231T_App/releases' target='_blank'>OpenBeken Releases</a>
 			</div>
 		</div>
 
@@ -93,45 +91,14 @@ $fwAssetEsp32 = $Config->read('update_automatic_lang_esp32');
 						</div>
 					</div>
 					<div class="row g-4 upload-form-row mb-3">
-						<div class="col col-12 col-sm-6">
-							<label for="update_automatic_lang" class="form-label">
-								<?php echo __('CONFIG_AUTOMATIC_FW_ESP8266', 'USER_CONFIG'); ?>
-							</label>
-
-							<select class="form-control form-select" id="update_automatic_lang" name='update_automatic_lang'>
-								<?php if ('' === $fwAsset) { ?>
-									<option><?php echo __('PLEASE_SELECT'); ?></option>
-								<?php } ?>
-
-								<?php foreach ($esp8266Releases as $tr) { ?>
-									<option value='<?php echo $tr; ?>'
-										<?php echo HtmlAttributeHelper::selected($fwAsset === $tr); ?>
-									>
-										<?php echo $tr; ?>
-									</option>
-								<?php } ?>
-
-
-							</select>
-						</div>
-						<div class="col col-12 col-sm-6">
-							<label for="update_automatic_lang_esp32" class="form-label">
-								<?php echo __('CONFIG_AUTOMATIC_FW_ESP32', 'USER_CONFIG'); ?>
-							</label>
-
-							<select class="form-control form-select" id="update_automatic_lang_esp32" name='update_automatic_lang_esp32'>
-								<?php if ('' === $fwAssetEsp32) { ?>
-									<option><?php echo __('PLEASE_SELECT'); ?></option>
-								<?php } ?>
-
-								<?php foreach ($esp32Releases as $tr) { ?>
-									<option value='<?php echo $tr; ?>'
-										<?php echo HtmlAttributeHelper::selected($fwAssetEsp32 === $tr); ?>
-									>
-										<?php echo $tr; ?>
-									</option>
+						<div class="col col-12">
+							<label for="update_automatic_lang" class="form-label">OpenBeken chipset / OTA Update</label>
+							<select class="form-control form-select" id="update_automatic_lang" name="update_automatic_lang">
+								<?php foreach ($otaPlatforms as $platform) { ?>
+									<option value="<?php echo htmlspecialchars($platform, ENT_QUOTES, 'UTF-8'); ?>" <?php echo HtmlAttributeHelper::selected($fwAsset === $platform); ?>><?php echo htmlspecialchars($platform, ENT_QUOTES, 'UTF-8'); ?></option>
 								<?php } ?>
 							</select>
+							<div class="form-text">Only the asset marked “OTA Update” in the official OpenBeken release is used.</div>
 						</div>
 					</div>
 					<div class='row g-4 upload-actions-row'>

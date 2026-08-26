@@ -159,51 +159,33 @@ if (isset($_REQUEST['upload'])) {
     $OpenBekenHelper = new OpenBekenHelper(
         new GithubFlavoredMarkdownConverter(),
         $client,
-        new OpenBekenOtaScraper($Config->read('auto_update_channel'), new HttpBrowser()),
+        new OpenBekenOtaScraper($Config->read('auto_update_channel'), $client),
         $Config->read('auto_update_channel')
     );
 
-    foreach ([
-        'esp8266' => 'update_automatic_lang',
-        'esp32' => 'update_automatic_lang_esp32',
-    ] as $configKey) {
-        if (!empty($_REQUEST[$configKey])) {
-            $Config->write($configKey, $_REQUEST[$configKey]);
-        }
+    if (!empty($_REQUEST['update_automatic_lang'])) {
+        $Config->write('update_automatic_lang', strtoupper(trim($_REQUEST['update_automatic_lang'])));
     }
 
     $firmwareDownloader = new FirmwareDownloader(GuzzleFactory::getClient($Config), $firmwarefolder);
 
     try {
-        foreach ([
-            'esp8266' => 'update_automatic_lang',
-            'esp32' => 'update_automatic_lang_esp32',
-        ] as $platform => $configKey) {
-            $fwAsset = $Config->read($configKey);
-            if ('' === $fwAsset) {
-                throw new RuntimeException(__('MSG_SET_AUTOMATIC_LANG_FIRST', 'DEVICE_UPDATE'));
-            }
-
-            $result = $OpenBekenHelper->getLatestFirmwares($fwAsset);
-
-            $minimalFirmwarePath = '';
-            if ($result->hasMinimalFirmware()) {
-                $minimalFirmwarePath = $firmwareDownloader->download($result->getMinimalFirmwareUrl());
-                $minimal_firmware_path = $minimalFirmwarePath;
-            }
-            $new_firmware_path = $firmwareDownloader->download($result->getFirmwareUrl());
-            $targetVersion = $result->getTagName();
-            $updateTargets[$platform] = [
-                'minimalFirmwarePath' => $minimalFirmwarePath,
-                'newFirmwarePath' => $new_firmware_path,
-                'targetVersion' => $targetVersion,
-                'source' => 'automatic',
-            ];
-            $messages[] = __('ASSET', 'DEVICE_UPDATE').': '.$fwAsset.' | '.__(
-                'VERSION',
-                'DEVICE_UPDATE'
-            ).': '.$result->getTagName().' | '.__('DATE', 'DEVICE_UPDATE').' '.$result->getPublishedAt()->format('Y-m-d');
+        $platform = strtoupper(trim($Config->read('update_automatic_lang')));
+        if ('' === $platform) {
+            throw new RuntimeException(__('MSG_SET_AUTOMATIC_LANG_FIRST', 'DEVICE_UPDATE'));
         }
+
+        $result = $OpenBekenHelper->getLatestFirmwares($platform);
+        $new_firmware_path = $firmwareDownloader->download($result->getFirmwareUrl());
+        $targetVersion = $result->getTagName();
+        $updateTargets[$platform] = [
+            'minimalFirmwarePath' => '',
+            'newFirmwarePath' => $new_firmware_path,
+            'targetVersion' => $targetVersion,
+            'source' => 'automatic',
+            'platform' => $platform,
+        ];
+        $messages[] = 'OTA Update: '.$platform.' | '.__('VERSION', 'DEVICE_UPDATE').': '.$result->getTagName().' | '.__('DATE', 'DEVICE_UPDATE').' '.$result->getPublishedAt()->format('Y-m-d');
 
         if (!empty($updateTargets)) {
             $messages[] = __('AUTO_SUCCESSFULL_DOWNLOADED', 'DEVICE_UPDATE').'<br/>';

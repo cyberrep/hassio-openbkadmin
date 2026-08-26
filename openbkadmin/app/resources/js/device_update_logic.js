@@ -52,32 +52,18 @@ function getFailureDetails({ targetVersion, beforeVersion, currentVersion }) {
 }
 
 function detectDevicePlatform(response) {
-  const hardware = response?.StatusFWR?.Hardware ?? "";
-  const version = response?.StatusFWR?.Version ?? "";
-
-  if (hardware.toUpperCase().includes("ESP32")) {
-    return "esp32";
-  }
-
-  if (version.toLowerCase().includes("(OpenBeken32")) {
-    return "esp32";
-  }
-
-  return "esp8266";
+  const hardware = String(response?.StatusFWR?.Hardware ?? "").toUpperCase();
+  const version = String(response?.StatusFWR?.Version ?? "").toUpperCase();
+  const combined = `${hardware} ${version}`;
+  const match = combined.match(/(?:OPEN)?(BK\d+[A-Z]*|XR\d+|BL\d+|W\d+|LN\d+[A-Z]*|TR\d+|RTL\d+[A-Z0-9]*|ESP32[A-Z0-9_-]*)/);
+  return match ? match[1].replace(/^OPEN/, "") : "UNKNOWN";
 }
 
 function resolveUpdateTarget(updateTargets, response) {
   const platform = detectDevicePlatform(response);
-
-  if (updateTargets[platform]) {
-    return updateTargets[platform];
-  }
-
-  if (updateTargets.default) {
-    return updateTargets.default;
-  }
-
-  throw Error(`No update target configured for ${platform}`);
+  if (updateTargets[platform]) return updateTargets[platform];
+  if (updateTargets.default) return updateTargets.default;
+  throw Error(`No OTA Update target configured for chipset ${platform}`);
 }
 
 function determineUpgradePlan(target, response) {
@@ -87,26 +73,6 @@ function determineUpgradePlan(target, response) {
   const targetVersion = target?.targetVersion ?? "";
   const source = target?.source ?? "";
 
-  if (
-    source === "automatic" &&
-    platform === "esp8266" &&
-    minimalOtaUrl &&
-    targetVersion &&
-    compareVersions(
-      extractVersionFromResponse(currentVersion),
-      LEGACY_ESP8266_MULTI_HOP_BASELINE,
-    ) === -1
-  ) {
-    return {
-      type: "blocked",
-      key: "BLOCK_UPDATE_LEGACY_PATH_REQUIRED",
-      values: [
-        currentVersion,
-        targetVersion,
-        LEGACY_ESP8266_MULTI_HOP_BASELINE,
-      ],
-    };
-  }
 
   if (minimalOtaUrl) {
     return {

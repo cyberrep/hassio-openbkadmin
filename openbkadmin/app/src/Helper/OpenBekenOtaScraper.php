@@ -2,91 +2,125 @@
 
 namespace OpenBKAdmin\Helper;
 
-use Symfony\Component\BrowserKit\HttpBrowser;
-use Symfony\Component\DomCrawler\Crawler;
+use GuzzleHttp\Client;
 
+/**
+ * Reads firmware metadata exclusively from the official OpenBeken GitHub releases.
+ * The automatic updater deliberately selects only the release asset documented as
+ * "OTA Update" for a chipset/platform.
+ */
 class OpenBekenOtaScraper
 {
-    public const ESP8266 = 'ESP8266';
-    public const ESP32 = 'ESP32';
-
-    private const OTA_URLS = [
-        'stable' => [
-            self::ESP8266 => 'https://ota.OpenBeken.com/OpenBeken/release/',
-            self::ESP32 => 'https://ota.OpenBeken.com/OpenBeken32/release/',
-        ],
-        'dev' => [
-            self::ESP8266 => 'https://ota.OpenBeken.com/OpenBeken/',
-            self::ESP32 => 'https://ota.OpenBeken.com/OpenBeken32/',
-        ],
-    ];
-
-    private const RULES = [
-        self::ESP8266 => [
-            'date_column' => 6,
-        ],
-        self::ESP32 => [
-            'date_column' => 4,
-        ],
-    ];
+    public const RELEASES_URL = 'https://github.com/openshwprojects/OpenBK7231T_App/releases';
+    private const API_URL = 'https://api.github.com/repos/openshwprojects/OpenBK7231T_App/releases';
 
     private string $updateChannel;
+    private Client $client;
 
-    private HttpBrowser $client;
-
-    public function __construct(string $updateChannel, HttpBrowser $client)
+    public function __construct(string $updateChannel, $client = null)
     {
         $this->updateChannel = $updateChannel;
-        $this->client = $client;
+        $this->client = $client instanceof Client ? $client : new Client([
+            'headers' => [
+                'Accept' => 'application/vnd.github+json',
+                'User-Agent' => 'OpenBKAdmin',
+            ],
+            'connect_timeout' => 10,
+            'timeout' => 20,
+        ]);
     }
 
-    public function getEsp8266Firmware(): OpenBekenFirmwareResult
+    /** @return array<string,array{platform:string,filename:string,url:string,version:string,publishedAt:\DateTime}> */
+    public function getOtaFirmwares(): array
     {
-        return $this->getFirmware(self::ESP8266);
-    }
-
-    public function getEsp32Firmware(): OpenBekenFirmwareResult
-    {
-        return $this->getFirmware(self::ESP32);
-    }
-
-    private function getFirmware(string $type)
-    {
-        $crawler = $this->client->request('GET', self::OTA_URLS[$this->updateChannel][$type]);
-
-        $firmwares = $crawler->filter('table tr td:nth-child(2)')->each(function ($node) {
-            return new OpenBekenFirmware(basename($node->text()), $node->text());
-        });
-
-        foreach ($firmwares as $index => $firmware) {
-            if (!str_starts_with($firmware->getUrl(), 'http')) {
-                unset($firmwares[$index]);
+        $release = $this->getRelease();
+        $body = (string) ($release['body'] ?? '');
+        $assets = [];
+        foreach (($release['assets'] ?? []) as $asset) {
+            if (!empty($asset['name']) && !empty($asset['browser_download_url'])) {
+                $assets[$asset['name']] = $asset['browser_download_url'];
             }
         }
 
-        $version = $this->getVersion($crawler);
-        $publishDate = $this->getPublishDate($crawler, $type);
+        $result = [];
+        foreach ($this->parseOtaTable($body) as $platform => $filename) {
+            if (!isset($assets[$filename])) {
+                continue;
+            }
+            $result[$platform] = [
+                'platform' => $platform,
+                'filename' => $filename,
+                'url' => $assets[$filename],
+                'version' => $this->extractVersion($filename, (string) ($release['tag_name'] ?? '')),
+                'publishedAt' => new \DateTime((string) ($release['published_at'] ?? 'now')),
+            ];
+        }
 
-        return new OpenBekenFirmwareResult($version, $publishDate, $firmwares);
+        if (empty($result)) {
+            throw new \RuntimeException('No OTA Update assets were found in the official OpenBeken GitHub release.');
+        }
+
+        ksort($result, SORT_NATURAL | SORT_FLAG_CASE);
+        return $result;
     }
 
-    private function getVersion(Crawler $crawler): string
+    public function getOtaFirmware(string $platform): array
     {
-        $text = $crawler->filter('h2')->innerText();
-
-        preg_match('/((\d+\.)+\d)/', $text, $matches);
-
-        return $matches[1];
+        $platform = strtoupper(trim($platform));
+        $firmwares = $this->getOtaFirmwares();
+        if (!isset($firmwares[$platform])) {
+            throw new \InvalidArgumentException(sprintf('No OTA Update asset is published for chipset %s.', $platform));
+        }
+        return $firmwares[$platform];
     }
 
-    private function getPublishDate(Crawler $crawler, string $type): \DateTime
+    private function getRelease(): array
     {
-        $dateColumn = self::RULES[$type]['date_column'];
+        $url = self::API_URL.('dev' === $this->updateChannel ? '?per_page=20' : '/latest');
+        $data = json_decode((string) $this->client->get($url)->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        if ('dev' === $this->updateChannel) {
+            foreach ($data as $release) {
+                if (empty($release['draft'])) {
+                    return $release;
+                }
+            }
+            throw new \RuntimeException('No OpenBeken GitHub release is available.');
+        }
+        return $data;
+    }
 
-        $dates = $crawler->filter("table tr td:nth-child({$dateColumn})")->each(function ($node) {
-            return $node->text();
-        });
+    /** @return array<string,string> */
+    private function parseOtaTable(string $body): array
+    {
+        $rows = [];
+        foreach (preg_split('/\R/', $body) as $line) {
+            if (!str_contains($line, '|')) {
+                continue;
+            }
+            $columns = array_map('trim', explode('|', trim($line, " \t|")));
+            if (count($columns) < 3 || 0 !== strcasecmp($columns[1], 'OTA Update')) {
+                continue;
+            }
+            $platform = strtoupper(preg_replace('/[`*_]/', '', $columns[0]));
+            $filename = preg_replace('/[`*_]/', '', $columns[2]);
+            if (preg_match('/\[([^\]]+)\]\([^\)]+\)/', $filename, $match)) {
+                $filename = $match[1];
+            }
+            if ('' !== $platform && '' !== $filename) {
+                $rows[$platform] = trim($filename);
+            }
+        }
+        return $rows;
+    }
 
-        return \DateTime::createFromFormat('Ymd H:i', $dates[0]);
+    private function extractVersion(string $filename, string $tag): string
+    {
+        if (preg_match('/(?<!\d)(\d+\.\d+\.\d+(?:\.\d+)?)(?!\d)/', $filename, $match)) {
+            return $match[1];
+        }
+        if (preg_match('/(?<!\d)(\d+\.\d+\.\d+(?:\.\d+)?)(?!\d)/', $tag, $match)) {
+            return $match[1];
+        }
+        return ltrim($tag, 'vV');
     }
 }

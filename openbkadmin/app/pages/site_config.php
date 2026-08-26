@@ -91,18 +91,18 @@ $config['mqtt_discovery_password'] = '';
 $OpenBekenHelper = new OpenBekenHelper(
     new GithubFlavoredMarkdownConverter(),
     GuzzleFactory::getClient($Config),
-    new OpenBekenOtaScraper($Config->read('auto_update_channel'), new HttpBrowser()),
+    new OpenBekenOtaScraper($Config->read('auto_update_channel'), GuzzleFactory::getClient($Config)),
     $Config->read('auto_update_channel')
 );
 $OpenBekenEsp8266Releases = [];
 $OpenBekenEsp32Releases = [];
 $OpenBekenOtaWarning = '';
 try {
-    $OpenBekenEsp8266Releases = $OpenBekenHelper->getEsp8266Releases();
-    $OpenBekenEsp32Releases = $OpenBekenHelper->getEsp32Releases();
+    $OpenBekenEsp8266Releases = $OpenBekenHelper->getOtaPlatforms();
+    $OpenBekenEsp32Releases = [];
 } catch (\Throwable $e) {
     // Settings must remain usable even when the external OTA host/DNS is unavailable.
-    $OpenBekenOtaWarning = 'OpenBeken OTA service is currently unavailable. Settings can still be changed and saved.';
+    $OpenBekenOtaWarning = 'OpenBeken GitHub releases are currently unavailable. Settings can still be changed and saved.';
 }
 
 $autoFirmwareChannels = ['stable', 'dev'];
