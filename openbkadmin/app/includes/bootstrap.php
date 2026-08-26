@@ -13,21 +13,18 @@ register_shutdown_function(static function (): void {
     }
 });
 
-
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 if (!function_exists('curl_init')) {
     echo 'ERROR: PHP cURL is missing.';
     echo 'Please enable PHP cURL extension and restart web-server.';
-
     exit;
 }
 
 if (!class_exists('ZipArchive')) {
     echo 'ERROR: PHP Zip is missing.';
     echo 'Please enable PHP Zip extension and restart web-server.';
-
     exit;
 }
 
@@ -62,6 +59,9 @@ $loggedin = false;
 $docker = false;
 
 require_once _APPROOT_.'vendor/autoload.php';
+// 0.5.1: define the enhanced OpenBeken scanner before devices_autoscan.php
+// declares its legacy fallback implementation.
+require_once _HELPERSDIR_.'openbeken_discovery_v051.php';
 
 use Selective\Container\Container;
 use OpenBKAdmin\Config;
@@ -87,11 +87,11 @@ if (file_exists(_APPROOT_.'.dockerenv')) {
 $Config = $container->get(Config::class);
 $i18n = $container->get(i18n::class);
 $i18n->setCachePath(_TMPDIR_.'cache/i18n/');
-$i18n->setFilePath(_LANGDIR_.'{LANGUAGE}/lang.ini'); // language file path
+$i18n->setFilePath(_LANGDIR_.'{LANGUAGE}/lang.ini');
 $i18n->setFallbackLang('en');
 $i18n->setPrefix('__L');
 $i18n->setSectionSeparator('_');
-$i18n->setMergeFallback(true); // make keys available from the fallback language
+$i18n->setMergeFallback(true);
 $i18n->init();
 
 $lang = $i18n->getAppliedLang();
