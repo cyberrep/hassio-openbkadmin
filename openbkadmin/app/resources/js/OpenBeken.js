@@ -2,108 +2,59 @@ import statusHelpers from "./status_helpers";
 
 const { normalizeStatusData } = statusHelpers;
 
-/**
- * Your classic OpenBeken
- * @typedef {Object} OpenBeken
- * @method getStatus
- * @property {int} timeout Current state of the OpenBeken
- */
-
 class OpenBeken {
   constructor(options) {
-    this.options = {
-      timeout: 10,
-    };
-
+    this.options = { timeout: 10 };
     $.extend(this.options, options);
   }
 
-  /**
-   * getStatus
-   *
-   * @param {string} ip
-   * @param {int} id
-   * @param {callback} callback
-   */
   getStatus(ip, id, callback) {
-    var cmnd = "Status 0";
-
-    this._doAjax(ip, id, cmnd, callback);
+    // Status 0 is a Tasmota compatibility response in OpenBeken and its POWER
+    // value is not authoritative for OBK channels. Fetch native `Ch` values
+    // and merge them into the status payload used by the device list.
+    this._doAjax(ip, id, "Status 0", (status) => {
+      if (!status || status.ERROR || status.WARNING) {
+        callback(status);
+        return;
+      }
+      this._doAjax(ip, id, "Ch", (channels) => {
+        if (channels && !channels.ERROR && !channels.WARNING) {
+          status.OpenBKChannels = channels;
+        }
+        callback(status);
+      });
+    });
   }
 
-  /**
-   * getAllStatus
-   *
-   * @param {int} timeout
-   * @param {callback} callback
-   */
   getAllStatus(timeout, callback) {
-    var cmnd = "Status 0";
-
-    this._doAjaxAll(timeout, cmnd, callback);
+    this._doAjaxAll(timeout, "Status 0", callback);
   }
 
   updateConfig(device_id, cmnd, newvalue, callback) {
-    var cmnd = cmnd + " " + newvalue;
-
-    this._doAjax(null, device_id, cmnd, callback);
+    this._doAjax(null, device_id, cmnd + " " + newvalue, callback);
   }
 
   generic(device_id, cmnd, newvalue, callback) {
-    var newvalue = newvalue !== undefined ? " " + newvalue : "";
-    var cmnd = cmnd + newvalue;
-
-    this._doAjax(null, device_id, cmnd, callback);
+    const value = newvalue !== undefined ? " " + newvalue : "";
+    this._doAjax(null, device_id, cmnd + value, callback);
   }
 
-  /**
-   * getStatus
-   *
-   * @param {string} ip
-   * @param {int} id
-   * @param {int} relais
-   * @param {function} callback
-   */
   toggle(ip, id, relais, callback) {
     relais = relais || 1;
-    var cmnd = "Power" + relais + " toggle";
-
-    console.log(
-      "[OpenBeken][toggle][" + ip + "][Relais" + relais + "] cmnd => " + cmnd,
-    );
-
+    const cmnd = "Power" + relais + " toggle";
+    console.log("[OpenBeken][toggle][" + ip + "][Relais" + relais + "] cmnd => " + cmnd);
     this._doAjax(ip, id, cmnd, callback);
   }
 
-  /**
-   * getStatus
-   *
-   * @param {string} ip
-   * @param {int} id
-   * @param {int} relais
-   * @param {function} callback
-   */
   off(ip, id, relais, callback) {
     relais = relais || 1;
-    var cmnd = "Power" + relais + " 0";
-
-    console.log(
-      "[OpenBeken][toggle][" + ip + "][Relais" + relais + "] cmnd => " + cmnd,
-    );
-
+    const cmnd = "Power" + relais + " 0";
+    console.log("[OpenBeken][toggle][" + ip + "][Relais" + relais + "] cmnd => " + cmnd);
     this._doAjax(ip, id, cmnd, callback);
   }
 
-  /**
-   * _doAjax
-   * @param {string} ip
-   * @param {int} id
-   * @param {string} cmnd
-   * @param {callback} callback
-   * @private
-   */
   _doAjax(ip, id, cmnd, callback) {
-    var ip = ip || id;
+    ip = ip || id;
     $.ajax({
       dataType: "json",
       url: `${this.options.base_url}actions?doAjax`,
@@ -111,134 +62,78 @@ class OpenBeken {
       cache: false,
       type: "post",
       async: true,
-      data: {
-        id: id,
-        cmnd: encodeURIComponent(cmnd),
-      },
+      data: { id: id, cmnd: encodeURIComponent(cmnd) },
       success: function (data) {
         console.log("[OpenBeken][doAjax][" + ip + "] Got response from: " + cmnd);
-        if (data.WARNING) {
-          alert(ip + ": " + data.WARNING);
-        }
+        if (data.WARNING) alert(ip + ": " + data.WARNING);
         callback(data);
       },
-      error: function (data, xmlhttprequest, textstatus, message) {
-        callback(data);
-      },
+      error: function (data) { callback(data); },
     });
   }
 
-  /**
-   * _doAjaxAll
-   * @param {int} timeout
-   * @param {string} cmnd
-   * @param {callback} callback
-   * @private
-   */
   _doAjaxAll(timeout, cmnd, callback) {
-    var timeout = timeout || this.options.timeout;
+    timeout = timeout || this.options.timeout;
     $.ajax({
       dataType: "json",
       url: `${this.options.base_url}actions?doAjaxAll`,
       timeout: timeout * 1000,
       cache: false,
       type: "post",
-      data: {
-        cmnd: encodeURIComponent(cmnd),
-      },
-      success: function (data) {
-        console.log("[OpenBeken][doAjaxAll] Got response from: " + cmnd);
-        if (data.WARNING) {
-          alert(ip + ": " + data.WARNING);
-        }
-        callback(data);
-      },
-      error: function (data, xmlhttprequest, textstatus, message) {
-        callback(data);
-      },
+      data: { cmnd: encodeURIComponent(cmnd) },
+      success: function (data) { callback(data); },
+      error: function (data) { callback(data); },
     });
   }
 
-  /**
-   * parseDeviceStatus
-   * @param {object} data
-   * @param {int} device_relais
-   * @returns {string}
-   */
   parseDeviceStatus(data, device_relais) {
-    let device_status = "NONE";
-    if (data.StatusSTS !== undefined) {
-      if (
-        device_relais !== undefined &&
-        data.StatusSTS[`POWER${device_relais}`] !== undefined
-      ) {
-        if (data.StatusSTS[`POWER${device_relais}`].STATE !== undefined) {
-          device_status = data.StatusSTS[`POWER${device_relais}`].STATE;
-        } else {
-          device_status = data.StatusSTS[`POWER${device_relais}`];
-        }
-      } else {
-        if (data.StatusSTS.POWER !== undefined) {
-          if (data.StatusSTS.POWER.STATE !== undefined) {
-            device_status = data.StatusSTS.POWER.STATE;
-          } else {
-            device_status = data.StatusSTS.POWER;
-          }
-        }
+    // Prefer native OpenBeken channel data. `Ch` returns all used channels in
+    // JSON and is the same channel state used by the native OBK Web UI.
+    if (data && data.OpenBKChannels) {
+      const channels = data.OpenBKChannels;
+      const relay = Number.parseInt(device_relais, 10);
+      const candidates = [];
+      if (!Number.isNaN(relay)) {
+        candidates.push(`Channel${relay}`, `Ch${relay}`);
+        if (relay > 0) candidates.push(`Channel${relay - 1}`, `Ch${relay - 1}`);
       }
-    } else {
-      if (
-        device_relais !== undefined &&
-        data[`POWER${device_relais}`] !== undefined
-      ) {
-        if (data[`POWER${device_relais}`].STATE !== undefined) {
-          device_status = data[`POWER${device_relais}`].STATE;
-        } else {
-          device_status = data[`POWER${device_relais}`];
-        }
-      } else {
-        if (data.POWER !== undefined) {
-          if (data.POWER.STATE !== undefined) {
-            device_status = data.POWER.STATE;
-          } else {
-            device_status = data.POWER;
-          }
+      for (const key of candidates) {
+        if (Object.prototype.hasOwnProperty.call(channels, key)) {
+          const raw = channels[key] && channels[key].STATE !== undefined ? channels[key].STATE : channels[key];
+          const numeric = Number.parseFloat(raw);
+          if (!Number.isNaN(numeric)) return numeric !== 0 ? "ON" : "OFF";
+          const text = String(raw).trim().toUpperCase();
+          if (text === "ON" || text === "OFF") return text;
         }
       }
     }
 
+    let device_status = "NONE";
+    if (data.StatusSTS !== undefined) {
+      if (device_relais !== undefined && data.StatusSTS[`POWER${device_relais}`] !== undefined) {
+        const value = data.StatusSTS[`POWER${device_relais}`];
+        device_status = value && value.STATE !== undefined ? value.STATE : value;
+      } else if (data.StatusSTS.POWER !== undefined) {
+        const value = data.StatusSTS.POWER;
+        device_status = value && value.STATE !== undefined ? value.STATE : value;
+      }
+    } else if (device_relais !== undefined && data[`POWER${device_relais}`] !== undefined) {
+      const value = data[`POWER${device_relais}`];
+      device_status = value && value.STATE !== undefined ? value.STATE : value;
+    } else if (data.POWER !== undefined) {
+      const value = data.POWER;
+      device_status = value && value.STATE !== undefined ? value.STATE : value;
+    }
     return device_status;
   }
 
-  /**
-   * parseDeviceHostname
-   * @param {object} data
-   * @returns {boolean|string}
-   */
   parseDeviceHostname(data) {
-    var device_hostname = false;
-
-    if (data.StatusNET !== undefined) {
-      if (data.StatusNET.Hostname !== undefined) {
-        device_hostname = data.StatusNET.Hostname;
-      }
-    }
-    return device_hostname;
+    if (data.StatusNET !== undefined && data.StatusNET.Hostname !== undefined) return data.StatusNET.Hostname;
+    return false;
   }
 
-  /**
-   * directAjax
-   *
-   * @param {string} url
-   */
   directAjax(url) {
-    $.ajax({
-      url: url,
-      timeout: this.options.timeout * 1000,
-      cache: false,
-      success: function (data) {},
-      error: function (data, xmlhttprequest, textstatus, message) {},
-    });
+    $.ajax({ url: url, timeout: this.options.timeout * 1000, cache: false });
   }
 
   setDeviceValue(id, field, newvalue, td) {
@@ -248,59 +143,22 @@ class OpenBeken {
       timeout: this.options.timeout * 1000,
       cache: false,
       type: "post",
-      data: {
-        id: id,
-        field: encodeURIComponent(field),
-        newvalue: encodeURIComponent(newvalue),
-        target: "csv",
-      },
-      success: function (data) {
-        // var data = data || { ERROR : "NO DATA" };
-
-        console.log(
-          "[OpenBeken][doAjax][" +
-            id +
-            "] Response from: " +
-            field +
-            " => " +
-            JSON.stringify(data),
-        );
-        console.log(
-          "[OpenBeken][doAjax][" +
-            id +
-            "] Got response from: " +
-            field +
-            " => " +
-            newvalue,
-        );
-
-        td.html(data.position);
-      },
-      error: function (data, xmlhttprequest, textstatus, message) {
-        console.log("ERROR setDeviceValue");
-      },
+      data: { id: id, field: encodeURIComponent(field), newvalue: encodeURIComponent(newvalue), target: "csv" },
+      success: function (data) { td.html(data.position); },
+      error: function () { console.log("ERROR setDeviceValue"); },
     });
   }
 
-  parseStatusData(data) {
-    return normalizeStatusData(data);
-  }
+  parseStatusData(data) { return normalizeStatusData(data); }
 
   _parseVersion(versionString) {
     versionString = versionString.replace("-minimal", "").replace(/\./g, "");
-
-    var last = versionString.slice(-1);
+    const last = versionString.slice(-1);
     if (isNaN(last)) {
-      versionString = versionString.replace(
-        last,
-        last.charCodeAt(0) - 97 < 10
-          ? "0" + (last.charCodeAt(0) - 97)
-          : last.charCodeAt(0) - 97,
-      );
+      versionString = versionString.replace(last, last.charCodeAt(0) - 97 < 10 ? "0" + (last.charCodeAt(0) - 97) : last.charCodeAt(0) - 97);
     } else {
       versionString = versionString + "00";
     }
-
     return versionString;
   }
 }
