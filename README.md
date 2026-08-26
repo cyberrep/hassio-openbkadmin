@@ -1,5 +1,8 @@
 # OpenBKAdmin
 
+<img width="2172" height="724" alt="image" src="https://github.com/user-attachments/assets/3adbe179-15d8-4c85-be03-19a219d580c2" />
+
+
 **Centralized OpenBeken device management for Home Assistant**
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring and managing devices running **OpenBeken** from a single web interface.
