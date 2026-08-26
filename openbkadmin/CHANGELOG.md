@@ -1,5 +1,19 @@
 # OpenBKAdmin Changelog
 
+## [0.6.4] - 2026-08-26
+
+### MQTT discovery
+- Aligned discovery with the official OpenBeken native MQTT topic documentation.
+- Native OpenBeken devices are identified from their base-topic publishes such as `<device>/connected`, `<device>/ip`, `<device>/rssi`, `<device>/uptime`, `<device>/freeheap`, `<device>/sockets`, `<device>/datetime`, `<device>/mac`, `<device>/build` and `<device>/host`.
+- Requests `<device>/ip/get` after native discovery; OpenBeken documents VARIABLE/get with an empty payload as the query mechanism.
+- Tasmota-compatible `tele/stat` remains only as a fallback and STATUS0 replies are accepted only when firmware identifies as OpenBeken, preventing real Tasmota devices from entering OpenBKAdmin discovery results.
+- `MqttGroup` is not used as device identity because OpenBeken documents it as a shared command group; the per-device ShortName/base topic is the correct identity.
+
+### Device state
+- Fixed OpenBeken native channel indexing: OpenBKAdmin relay 1 maps to OpenBeken Channel0, relay 2 to Channel1, and so on.
+- Initial device-list loading now also requests native `Ch` channel data, not only periodic single-device refreshes.
+- Native channel values are normalized for numeric, boolean and ON/OFF representations before rendering the switch state.
+
 ## [0.6.3] - 2026-08-26
 
 ### MQTT discovery
