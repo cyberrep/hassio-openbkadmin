@@ -1,5 +1,20 @@
 # OpenBKAdmin Changelog
 
+## [0.5.0] - 2026-08-26
+
+### Firmware update
+- Fixed the device-selection handoff between the firmware selection table and the update execution page. The shared table posts `device_ids[]`, which is now accepted by the updater.
+- Simplified the OpenBeken firmware screen: removed the obsolete Minimal/Full firmware presentation and exposed a single local firmware file workflow.
+- Added a clearer Official OpenBeken Release workflow with chipset selection and a dedicated **Use Official Release** action.
+- Official automatic firmware continues to come exclusively from `openshwprojects/OpenBK7231T_App` GitHub Releases and uses the OTA Update asset for the selected chipset.
+- OTA server address now defaults to the Home Assistant/OpenBKAdmin host used by the browser when no valid configured address is available, avoiding internal add-on/container addresses such as `172.30.x.x`.
+- OTA server port defaults to the exposed OpenBKAdmin web port.
+- Improved firmware-update button labels and layout.
+
+### Interface
+- Firmware update modes are now visually separated into OTA Server, Official OpenBeken Release, and Local Firmware sections.
+- Reduced legacy Tasmota-style firmware terminology in the OpenBeken updater.
+
 ## [0.4.9] - 2026-08-26
 
 ### Firmware update
