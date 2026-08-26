@@ -1,5 +1,18 @@
 # OpenBKAdmin Changelog
 
+## [0.5.3] - 2026-08-26
+
+### Firmware update safety
+- Official Release mode now presents chipset selection as automatic instead of asking the user to choose a chipset manually.
+- Before flashing, OpenBKAdmin re-reads `Status 0` from every selected physical device and detects its chipset from the live OpenBeken firmware/hardware information.
+- Mixed-chipset selections are supported: the correct official OTA Update asset is resolved and downloaded independently for each detected chipset.
+- The update is stopped before flashing if a selected device chipset cannot be identified.
+- Added a confirmation summary showing the selected device Full Name, detected chipset and IP before the OTA execution log.
+- Existing newer-only/version checks remain active for each device independently.
+
+### Device identity
+- Firmware update logs prefer the live OpenBeken Full Name instead of MQTT/short/channel names.
+
 ## [0.5.1] - 2026-08-26
 
 ### Firmware update
