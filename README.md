@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.5.4**
+> Current add-on version: **0.5.7**
 
 ## Features
 
@@ -32,10 +32,10 @@ OpenBKAdmin can display IP address, Short Name, Full Name, chipset, firmware ver
 Firmware identification is separated into useful fields. For example, `OpenBK7231N_1.18.284` is displayed as chipset **BK7231N** and version **1.18.284**.
 
 ### Multi-channel devices
-Multi-channel OpenBeken devices can be represented as individual controllable outputs while sharing one physical device/IP. OpenBKAdmin reuses physical-device information for rows that share the same IP. Starting with 0.5.4, individual output state is read from the native OpenBeken channel value so one channel does not incorrectly copy another channel's ON/OFF state.
+Multi-channel OpenBeken devices can be represented as individual controllable outputs while sharing one physical device/IP. OpenBKAdmin reuses physical-device information for rows that share the same IP. Device state now prefers the native OpenBeken `Ch` channel response instead of relying on the Tasmota-compatible `Status 0` POWER field.
 
 ### Network Auto Scan
-Auto Scan supports configurable IP ranges and ports and validates discovered OpenBeken endpoints. Version 0.5.1 added a more tolerant two-pass network probe and an OpenBeken-native discovery fallback using `/obkdevicelist`, the HTTP peer list exposed by the firmware SSDP `obkDeviceList` implementation.
+Auto Scan supports configurable IP ranges and ports and validates discovered OpenBeken endpoints. It includes a tolerant two-pass network probe and OpenBeken-native discovery fallback using `/obkdevicelist`.
 
 ### MQTT discovery
 MQTT-assisted discovery supports broker host, port, credentials, discovery subscriptions/timeouts and command/status/telemetry prefixes.
@@ -48,6 +48,9 @@ The interface exposes supported OpenBeken configuration including network, MQTT,
 - Restore OpenBeken `.dmp` backups
 - Validate invalid/wrong backup files
 - Warn before restoring settings that may change network or MQTT accessibility
+- Before OTA, automatically create a timestamped configuration dump for every unique selected physical device
+- OTA backup filenames include the OpenBKAdmin device ID/name
+- LittleFS files such as `autoexec.bat` are treated separately and are not silently restored
 
 ### Firmware updates
 OpenBKAdmin firmware management is designed specifically around **OpenBeken**:
@@ -55,16 +58,16 @@ OpenBKAdmin firmware management is designed specifically around **OpenBeken**:
 - Automatic firmware retrieval from the official OpenBeken GitHub releases
 - Automatic chipset detection for selected physical devices
 - Chipset-aware firmware selection for each physical device
-- Uses only the firmware asset identified as **OTA Update** for the detected device chipset
+- Uses only the firmware asset identified as **OTA Update** for the detected chipset
 - Compares installed and available firmware versions
 - Offers normal updates only when the official firmware is newer
-- Avoids automatic downgrade to an older release
-- Updates multiple selected devices, resolving the correct OTA image independently per chipset
-- Revalidates the chipset immediately before preparing an automatic firmware update
-- Blocks automatic flashing when a compatible chipset/OTA target cannot be resolved safely
-- Shows the selected device Full Name, chipset and IP before execution
-- Uses one OpenBeken release metadata lookup for all selected chipsets and caches release metadata to reduce GitHub API requests/rate-limit failures
-- Uses the OpenBeken OTA command flow: `OtaUrl <url>` followed by `Upgrade 1`
+- Avoids automatic downgrade
+- Supports mixed-chipset selections
+- Shows selected device Full Name, chipset, current firmware and IP
+- Caches release metadata to reduce GitHub API rate-limit failures
+- Supports **Mass** parallel OTA and **Individual** sequential OTA modes
+- Limits post-OTA status verification to five attempts per device
+- Creates a pre-OTA configuration backup before flashing
 
 Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/releases
 
@@ -113,31 +116,28 @@ hassio-openbkadmin/
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
 
+### 0.5.7
+- Native OpenBeken `Ch` channel values used for ON/OFF state
+- Pre-OTA configuration backup for each unique physical device
+- Timestamped backup names containing device identity
+- LittleFS/`autoexec.bat` explicitly kept separate from automatic config restore
+- Mass and Individual OTA modes retained with five post-OTA checks
+
+### 0.5.6
+- Added Mass (parallel) and Individual (sequential) OTA modes
+- Reduced post-OTA verification to five attempts
+- Added `.ota` local firmware support
+
 ### 0.5.4
-- Correct native per-channel ON/OFF state for multi-channel OpenBeken devices
-- Official OTA lookup moved until after device selection
-- One GitHub release metadata lookup handles all selected chipsets
-- 15-minute OpenBeken release cache with rate-limit fallback
-- Selected-device summary shown before OTA execution
-- OpenBKAdmin navbar logo/favicons corrected
-
-### 0.5.3
-- Automatic chipset detection in the Official OpenBeken Release workflow
-- Revalidates each selected device chipset immediately before automatic OTA preparation
-- Resolves the correct official OTA image independently for mixed-chipset device selections
-- Blocks automatic firmware flashing when the chipset or compatible OTA target cannot be resolved safely
-- Shows Full Name, detected chipset and IP during firmware update selection/preparation
-- Firmware update logs prioritize the OpenBeken Full Name when available
-- Keeps installed-versus-available version checks and downgrade protection
-
-### 0.5.2
-- Improved automatic OpenBeken OTA preparation and chipset-aware update handling
-- Continued firmware workflow cleanup for physical devices and multi-device updates
+- Improved channel-aware state handling
+- Reduced OpenBeken GitHub release lookups with caching
+- Selected-device summary before OTA
+- Branding/favicon improvements
 
 ### 0.5.1
 - More reliable OpenBeken Auto Scan with two-pass probing
 - Native `/obkdevicelist` discovery fallback
-- Verified OpenBeken `OtaUrl` + `Upgrade 1` OTA flow
+- Verified OpenBeken OTA flow
 - Round OpenBKAdmin navigation icon
 - Centered device-selection checkboxes
 
