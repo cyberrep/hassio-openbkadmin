@@ -20,10 +20,10 @@ class MqttDiscoveryService
             $statusTopic = $this->extractStatusTopic($topic, $request->statPrefix);
             if (null !== $statusTopic) { $statusPayloads[$statusTopic] = $message; $discoveredTopics[$statusTopic] = true; return; }
 
-            // Official OpenBeken MQTT topics are BASE/connected, BASE/ip,
-            // BASE/rssi, BASE/uptime, BASE/freeheap, BASE/build, BASE/host, etc.
-            // Seeing any native telemetry topic identifies the base topic and lets
-            // us actively request BASE/ip/get instead of waiting for another cycle.
+            // Native OpenBeken telemetry uses BASE/connected, BASE/ip, BASE/rssi,
+            // BASE/uptime, BASE/freeheap, BASE/build, BASE/host, etc. These topics
+            // are strong OpenBeken discovery evidence and do not require Tasmota's
+            // tele/<topic>/... layout.
             $nativeBase = $this->extractNativeTelemetryBase($topic);
             if (null !== $nativeBase) {
                 $discoveredTopics[$nativeBase] = true;
@@ -37,6 +37,9 @@ class MqttDiscoveryService
                 return;
             }
 
+            // Compatibility discovery is kept for OpenBeken installations using
+            // tele/stat prefixes. The STATUS0 response is validated as OpenBeken
+            // later, so real Tasmota devices seen on the same broker are ignored.
             $mqttTopic = $this->extractDiscoveryTopic($topic, $request->telePrefix);
             if (null === $mqttTopic) return;
             $discoveredTopics[$mqttTopic] = true;
@@ -47,9 +50,6 @@ class MqttDiscoveryService
 
         try {
             $client->connect($request->username, $request->password, max($request->timeoutSeconds, 1));
-            // Subscribe to all broker traffic. OpenBeken's Group Topic is a command
-            // topic and is NOT a discovery prefix. Filtering happens in the callback
-            // using the documented native OpenBeken topic suffixes.
             $client->subscribe('#', $handleMessage);
             $deadline = $this->timeProvider->now() + max($request->timeoutSeconds, 65);
             while ($this->timeProvider->now() < $deadline) { $client->loopOnce($loopStartedAt); $this->timeProvider->sleep(50_000); }
@@ -65,6 +65,11 @@ class MqttDiscoveryService
             if ($this->deviceRepository->isMqttTopicAmbiguous($mqttTopic)) { $result->conflicts[]=['mqttTopic'=>$mqttTopic,'reason'=>'existing-topic-duplicate']; continue; }
             if (array_key_exists($mqttTopic, $statusPayloads)) {
                 $status = $this->responseParser->processResult($statusPayloads[$mqttTopic]);
+                // STATUS0 is Tasmota-compatible in OpenBeken, so a broker-wide
+                // subscription can also receive genuine Tasmota STATUS0 replies.
+                // Only accept compatibility replies whose firmware identifies as
+                // OpenBeken. Tasmota devices are silently excluded from results.
+                if (!$this->isOpenBekenStatus($status)) continue;
             } elseif (array_key_exists($mqttTopic, $nativeIps)) {
                 $status = new \stdClass(); $status->StatusNET = new \stdClass();
                 $status->StatusNET->IPAddress = $nativeIps[$mqttTopic];
@@ -80,6 +85,16 @@ class MqttDiscoveryService
             $status->OpenBKAdminMqttTopic=$mqttTopic;$status->OpenBKAdminDevicePort=$request->httpPort;$result->newDevices[]=$status;$claimedAddresses[$addressKey]=$mqttTopic;
         }
         return $result;
+    }
+
+    private function isOpenBekenStatus(\stdClass $status): bool
+    {
+        if (isset($status->ERROR)) return false;
+        $version = (string) ($status->StatusFWR->Version ?? '');
+        if (preg_match('/^Open(?:BK|BL|LN|W800|XR|RTL|TR|ESP|RDA)/i', $version)) return true;
+        if (false !== stripos($version, 'OpenBeken')) return true;
+        $module = (string) ($status->StatusFWR->Module ?? '');
+        return false !== stripos($module, 'OpenBeken');
     }
 
     private function extractNativeTelemetryBase(string $topic): ?string
