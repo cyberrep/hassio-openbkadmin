@@ -24,7 +24,6 @@ class OpenBekenOtaScraper
         ]);
     }
 
-    /** @return array<string,array{platform:string,filename:string,url:string,version:string,publishedAt:\DateTime}> */
     public function getOtaFirmwares(): array
     {
         $release = $this->getRelease();
@@ -92,8 +91,6 @@ class OpenBekenOtaScraper
                 $release = $data;
             }
         } catch (\Throwable $apiError) {
-            // GitHub's REST API has a low unauthenticated hourly limit. The public
-            // release page is not subject to that API quota, so use it as fallback.
             try {
                 $release = $this->getReleaseFromHtml();
             } catch (\Throwable $htmlError) {
@@ -113,7 +110,7 @@ class OpenBekenOtaScraper
         ])->getBody();
         $assets = [];
         $tag = '';
-        if (preg_match_all('#href=["\']([^"\']*/openshwprojects/OpenBK7231T_App/releases/download/([^/]+)/([^"\'?]+))#i', $html, $matches, PREG_SET_ORDER)) {
+        if (preg_match_all("#href=[\"']([^\"']*/openshwprojects/OpenBK7231T_App/releases/download/([^/]+)/([^\"'?]+))#i", $html, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $href = html_entity_decode($match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 if (str_starts_with($href, '/')) $href = 'https://github.com'.$href;
@@ -126,7 +123,6 @@ class OpenBekenOtaScraper
         return ['tag_name'=>$tag,'published_at'=>date(DATE_ATOM),'body'=>'','assets'=>array_values($assets)];
     }
 
-    /** @return array<string,string> */
     private function parseOtaTable(string $body): array
     {
         $rows = [];
