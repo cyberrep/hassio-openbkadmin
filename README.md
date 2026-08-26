@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.6.1**
+> Current add-on version: **0.6.4**
 
 ## Features
 
@@ -32,13 +32,15 @@ OpenBKAdmin can display IP address, Short Name, Full Name, chipset, firmware ver
 Firmware identification is separated into useful fields. For example, `OpenBK7231N_1.18.284` is displayed as chipset **BK7231N** and version **1.18.284**.
 
 ### Multi-channel devices
-Multi-channel OpenBeken devices can be represented as individual controllable outputs while sharing one physical device/IP. OpenBKAdmin reuses physical-device information for rows that share the same IP. Device state now prefers the native OpenBeken `Ch` channel response instead of relying on the Tasmota-compatible `Status 0` POWER field.
+Multi-channel OpenBeken devices can be represented as individual controllable outputs while sharing one physical device/IP. OpenBKAdmin reuses physical-device information for rows that share the same IP. Device state prefers native OpenBeken channel values, mapping relay/output rows to their corresponding channels (`Channel0`, `Channel1`, etc.) instead of relying only on the Tasmota-compatible `Status 0` POWER field.
 
 ### Network Auto Scan
 Auto Scan supports configurable IP ranges and ports and validates discovered OpenBeken endpoints. It includes a tolerant two-pass network probe and OpenBeken-native discovery fallback using `/obkdevicelist`.
 
 ### MQTT discovery
-MQTT-assisted discovery supports broker host, port, credentials and discovery timeout. Native OpenBeken MQTT discovery listens broadly and recognizes OpenBeken topics such as `<device-topic>/connected` and `<device-topic>/ip`, requesting the IP when needed. Tasmota-compatible discovery topics remain available as a fallback.
+MQTT-assisted discovery supports broker host, port, credentials and discovery timeout. Native OpenBeken discovery listens broadly for per-device base topics and recognizes native identity/telemetry topics such as `<device>/connected`, `<device>/ip`, `<device>/rssi`, `<device>/uptime`, `<device>/freeheap`, `<device>/sockets`, `<device>/datetime`, `<device>/mac`, `<device>/build` and `<device>/host`. When a device base topic is detected but its address is not yet known, OpenBKAdmin requests `<device>/ip/get`.
+
+Discovery does **not** require the Tasmota TELE compatibility flag. Tasmota-compatible TELE/STAT discovery remains only as a fallback and STATUS responses are validated so actual Tasmota devices are not imported as OpenBeken devices. OpenBeken `MqttGroup` / Group Topic is treated as a shared command group, not as a reliable per-device discovery identifier.
 
 ### Device configuration
 The interface exposes supported OpenBeken configuration including network, MQTT, timers, Wi-Fi/AP, power-on behavior, LED behavior, hostname, IP/gateway/subnet/DNS, MQTT topics/retain options and telemetry period.
@@ -116,13 +118,30 @@ hassio-openbkadmin/
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
 
+### 0.6.4
+- Improved native OpenBeken MQTT discovery based on per-device base topics
+- Discovery no longer requires the Tasmota TELE compatibility flag
+- Native MQTT discovery uses OpenBeken identity/telemetry topics and requests `<device>/ip/get` when needed
+- Tasmota STATUS replies are filtered so real Tasmota devices are not imported as OpenBeken
+- Clarified that `MqttGroup` / Group Topic is a command group rather than a per-device discovery identifier
+- Improved channel-aware ON/OFF state handling using native OpenBeken channel mapping
+
+### 0.6.3
+- Expanded native MQTT discovery to documented OpenBeken telemetry topics
+- Added OpenBeken/Tasmota validation for compatibility STATUS responses
+- Localized additional firmware-update and backup messages in pt-BR
+- Restored missing recent changelog history
+
+### 0.6.2
+- Expanded native OpenBeken MQTT detection beyond `connected` and `ip`
+- MQTT scan listens long enough for periodic native OpenBeken broadcasts
+- Footer shows the running OpenBKAdmin version
+
 ### 0.6.1
 - Improved MQTT discovery for native OpenBeken topic layout
 - Native discovery recognizes `<device-topic>/connected` and `<device-topic>/ip`
 - Requests device IP through MQTT when necessary
 - Broad MQTT subscription with internal OpenBeken filtering
-- Default MQTT discovery timeout increased to 15 seconds
-- Legacy `tele/+/LWT` discovery configuration migrates to the native discovery mode
 - Removed the redundant SelfUpdate entry from the main add-on navigation
 
 ### 0.5.8
