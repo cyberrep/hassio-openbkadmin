@@ -1,7 +1,6 @@
 <?php
 use League\CommonMark\GithubFlavoredMarkdownConverter;
 use OpenBKAdmin\Helper\GuzzleFactory;
-use OpenBKAdmin\Helper\HtmlAttributeHelper;
 use OpenBKAdmin\Helper\OpenBekenHelper;
 use OpenBKAdmin\Helper\OpenBekenOtaScraper;
 
@@ -9,29 +8,23 @@ $client = GuzzleFactory::getClient($Config);
 $OpenBekenHelper = new OpenBekenHelper(new GithubFlavoredMarkdownConverter(), $client, new OpenBekenOtaScraper($Config->read('auto_update_channel'), $client), $Config->read('auto_update_channel'));
 $releaseNotes = $OpenBekenHelper->getReleaseNotes();
 $changelog = $OpenBekenHelper->getChangelog();
-$otaPlatforms = [];
-$otaLookupError = null;
-try { $otaPlatforms = $OpenBekenHelper->getOtaPlatforms(); } catch (\Throwable $e) { $otaLookupError = $e->getMessage(); }
-$fwAsset = $Config->read('update_automatic_lang');
 
 $hostHeader = trim((string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? ''));
 $detectedHost = preg_replace('/:\d+$/', '', $hostHeader);
 if (str_starts_with($detectedHost, '[') && str_ends_with($detectedHost, ']')) $detectedHost = trim($detectedHost, '[]');
 $configuredOtaIp = trim((string) $Config->read('ota_server_ip'));
-// Replace stale/internal Docker addresses with the host used to access the add-on.
 if ($configuredOtaIp === '' || str_starts_with($configuredOtaIp, '172.30.')) $configuredOtaIp = $detectedHost;
 $configuredOtaPort = trim((string) $Config->read('ota_server_port')) ?: (string) ($_SERVER['SERVER_PORT'] ?? '9542');
 ?>
 <div class='row justify-content-sm-center upload-form-page'><div class='col col-12 col-md-9 col-xl-8'>
 <h2 class='text-sm-center mb-3'><?php echo $title; ?></h2>
 <div class="card upload-intro-card mb-4"><div class="card-body text-center"><p class="mb-2"><?php echo __('UPLOAD_DESCRIPTION', 'DEVICE_UPDATE'); ?></p><a href='https://github.com/openshwprojects/OpenBK7231T_App/releases' target='_blank' rel='noopener'>OpenBeken Releases</a></div></div>
-<?php if ($otaLookupError !== null) { ?><div class="alert alert-warning">OpenBeken firmware information is temporarily unavailable. Local firmware upload remains available.</div><?php } ?>
 <form class='upload-form' method='post' enctype='multipart/form-data' action='<?php echo _BASEURL_; ?>upload'>
 <div class="card upload-form-card mb-4"><div class="card-body">
 <h4 class="mb-3">OTA Server</h4>
 <div class='row g-4 mb-4'><div class="col col-12 col-sm-9"><label for="ota_server_ip" class="form-label"><?php echo __('CONFIG_SERVER_IP', 'USER_CONFIG'); ?></label><input type="text" class="form-control" id="ota_server_ip" name='ota_server_ip' required value='<?php echo htmlspecialchars($configuredOtaIp, ENT_QUOTES, 'UTF-8'); ?>'><div class="form-text">Defaults to the Home Assistant/OpenBKAdmin host reachable by your OpenBeken devices.</div></div><div class="col col-12 col-sm-3"><label for="ota_server_port" class="form-label"><?php echo __('CONFIG_SERVER_PORT', 'USER_CONFIG'); ?></label><input type="text" class="form-control" id="ota_server_port" name='ota_server_port' required value='<?php echo htmlspecialchars($configuredOtaPort, ENT_QUOTES, 'UTF-8'); ?>'></div></div>
 <hr><h4 class="mb-3">Official OpenBeken Release</h4>
-<div class="row g-3 align-items-end mb-4"><div class="col"><label for="update_automatic_lang" class="form-label">Chipset / OTA Update</label><select class="form-select" id="update_automatic_lang" name="update_automatic_lang" <?php echo empty($otaPlatforms) ? 'disabled' : ''; ?>><?php foreach ($otaPlatforms as $platform) { ?><option value="<?php echo htmlspecialchars($platform, ENT_QUOTES, 'UTF-8'); ?>" <?php echo HtmlAttributeHelper::selected($fwAsset === $platform); ?>><?php echo htmlspecialchars($platform, ENT_QUOTES, 'UTF-8'); ?></option><?php } ?></select><div class="form-text">Uses only the official asset intended for OTA Update for the selected chipset.</div></div><div class="col col-12 col-md-auto"><button type='submit' class='btn btn-primary w-100' id="automatic" name='auto' value='submit' <?php echo empty($otaPlatforms) ? 'disabled' : ''; ?>>Use Official Release</button></div></div>
+<div class="row g-3 align-items-end mb-4"><div class="col"><label class="form-label">Chipset / OTA Update</label><input type="text" class="form-control" value="Check chipset automatically" readonly><input type="hidden" name="update_automatic_lang" value="BK7231N"><div class="form-text">The chipset is verified again for every selected physical device before the firmware update starts. Mixed chipsets are supported.</div></div><div class="col col-12 col-md-auto"><button type='submit' class='btn btn-primary w-100' id="automatic" name='auto' value='submit'>Use Official Release</button></div></div>
 <hr><h4 class="mb-3">Local Firmware</h4>
 <div class='row g-3 align-items-end'><div class="col"><label for="new_firmware" class="form-label">Firmware file</label><input type="file" class="form-control" id="new_firmware" name='new_firmware' accept=".rbl,.bin,.img"></div><div class="col col-12 col-md-auto"><button type='submit' class='btn btn-secondary w-100' id="localUpload" name='upload' value='submit'>Use Local Firmware</button></div></div>
 </div></div></form>
