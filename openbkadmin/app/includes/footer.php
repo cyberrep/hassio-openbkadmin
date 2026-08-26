@@ -7,28 +7,22 @@
 				<?php if ('0' == $Config->read('hide_copyright')) { ?>
 					&copy; <?php echo date('Y'); ?>&nbsp;<?php echo __('BY'); ?> reloxx13 -
 				<?php } ?>
-				<?php $updateCheck = $Config->read('check_for_updates'); ?>
-				<?php $currentGitTag = $Config->read('current_git_tag'); ?>
-				<?php $currentGitBranch = $Config->read('current_git_branch'); ?>
-				<?php $footerVersion = substr($currentGitTag, 0, 15); ?>
-				<?php if (!empty($currentGitBranch)) {
-				    $footerVersion .= ' @'.substr($currentGitBranch, 0, 20);
-				} ?>
-
-
-				<div id="versionHolder" class='d-inline-block' data-update-check='<?php echo $updateCheck; ?>'>
-					<?php echo $footerVersion; ?>
-					<i id='update-icon'
-					   class='fa fa-question <?php echo '0' == $updateCheck ? 'd-none' : ''; ?> '
-					   data-current_git_tag='<?php echo substr($currentGitTag, 0, 15); ?>'
-					   data-update_channel='<?php echo $Config->read('update_channel'); ?>'
-					   style=''
-					></i>
-				</div><?php // endif;?>
+				<?php
+				$addonVersion = '';
+				$configYaml = dirname(_APPROOT_).'/config.yaml';
+				if (is_readable($configYaml)) {
+				    $yamlContents = file_get_contents($configYaml);
+				    if (false !== $yamlContents && preg_match('/^version:\s*["\']?([^"\'\s]+)["\']?\s*$/m', $yamlContents, $matches)) {
+				        $addonVersion = trim($matches[1]);
+				    }
+				}
+				?>
+				<?php if ('' !== $addonVersion) { ?>
+					OpenBKAdmin v<?php echo htmlspecialchars($addonVersion, ENT_QUOTES, 'UTF-8'); ?> -
+				<?php } ?>
+				<a href='https://github.com/cyberrep/hassio-openbkadmin' target='_blank' rel='noopener noreferrer'>OpenBKAdmin GitHub</a>
 				-
-				<a href='https://github.com/OpenBKAdmin/OpenBKAdmin' target='_blank'>OpenBKAdmin GitHub</a>
-				-
-				<a href='https://github.com/openshwprojects/OpenBK7231T_App' target='_blank'>OpenBeken GitHub</a>
+				<a href='https://github.com/openshwprojects/OpenBK7231T_App' target='_blank' rel='noopener noreferrer'>OpenBeken GitHub</a>
 			</span>
 		</div>
 	</div>
