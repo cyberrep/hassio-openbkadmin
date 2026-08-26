@@ -12,9 +12,11 @@ class OpenBekenOtaScraper
 {
     public const RELEASES_URL = 'https://github.com/openshwprojects/OpenBK7231T_App/releases';
     private const API_URL = 'https://api.github.com/repos/openshwprojects/OpenBK7231T_App/releases';
+    private const CACHE_TTL = 900;
 
     private string $updateChannel;
     private Client $client;
+    private ?array $releaseCache = null;
 
     public function __construct(string $updateChannel, $client = null)
     {
@@ -45,14 +47,10 @@ class OpenBekenOtaScraper
             }
         }
 
-        // The release body is the authoritative mapping of Platform -> Usage -> Filename.
-        // Match the Usage column as OTA Update and then resolve that filename against assets.
         $result = [];
         foreach ($this->parseOtaTable((string) ($release['body'] ?? '')) as $platform => $filename) {
             $url = $assets[$filename] ?? null;
             if ($url === null) {
-                // GitHub's generated release body may contain a linked filename or minor formatting
-                // differences. Fall back to an exact case-insensitive asset-name match.
                 foreach ($assets as $assetName => $assetUrl) {
                     if (strcasecmp($assetName, $filename) === 0) {
                         $filename = $assetName;
@@ -73,9 +71,6 @@ class OpenBekenOtaScraper
             ];
         }
 
-        // Defensive fallback: infer only canonical OTA filenames from release assets.
-        // This keeps updates working if GitHub changes markdown rendering, while avoiding
-        // variant builds such as battery/powerMetering/berry unless the release table says so.
         if (empty($result)) {
             foreach ($assets as $filename => $url) {
                 if (!preg_match('/^Open([A-Za-z0-9]+)_(\d+\.\d+\.\d+)(?:\.rbl|_ota\.img|_OTA\.bin(?:\.xz\.ota)?|_gz\.img)$/i', $filename, $m)) {
@@ -108,17 +103,49 @@ class OpenBekenOtaScraper
 
     private function getRelease(): array
     {
-        $url = self::API_URL.('dev' === $this->updateChannel ? '?per_page=20' : '/latest');
-        $data = json_decode((string) $this->client->get($url)->getBody(), true, 512, JSON_THROW_ON_ERROR);
-        if ('dev' === $this->updateChannel) {
-            foreach ($data as $release) {
-                if (empty($release['draft'])) {
-                    return $release;
+        if ($this->releaseCache !== null) {
+            return $this->releaseCache;
+        }
+
+        $cacheFile = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'openbkadmin-openbeken-release-'.($this->updateChannel === 'dev' ? 'dev' : 'stable').'.json';
+        $cached = null;
+        if (is_file($cacheFile)) {
+            $decoded = json_decode((string) @file_get_contents($cacheFile), true);
+            if (is_array($decoded) && isset($decoded['release']) && is_array($decoded['release'])) {
+                $cached = $decoded;
+                if ((time() - (int) ($decoded['saved_at'] ?? 0)) < self::CACHE_TTL) {
+                    return $this->releaseCache = $decoded['release'];
                 }
             }
-            throw new \RuntimeException('No OpenBeken GitHub release is available.');
         }
-        return $data;
+
+        $url = self::API_URL.('dev' === $this->updateChannel ? '?per_page=20' : '/latest');
+        try {
+            $data = json_decode((string) $this->client->get($url)->getBody(), true, 512, JSON_THROW_ON_ERROR);
+            if ('dev' === $this->updateChannel) {
+                $release = null;
+                foreach ($data as $candidate) {
+                    if (empty($candidate['draft'])) {
+                        $release = $candidate;
+                        break;
+                    }
+                }
+                if (!is_array($release)) {
+                    throw new \RuntimeException('No OpenBeken GitHub release is available.');
+                }
+            } else {
+                $release = $data;
+            }
+            @file_put_contents($cacheFile, json_encode(['saved_at' => time(), 'release' => $release]));
+            return $this->releaseCache = $release;
+        } catch (\Throwable $e) {
+            // GitHub unauthenticated API requests are rate limited. A previously
+            // successful response is safe to reuse when GitHub temporarily returns 403.
+            if (is_array($cached['release'] ?? null)) {
+                return $this->releaseCache = $cached['release'];
+            }
+            throw new \RuntimeException('Unable to read the official OpenBeken release metadata. Please try again later. '.$e->getMessage(), 0, $e);
+        }
     }
 
     /** @return array<string,string> */
