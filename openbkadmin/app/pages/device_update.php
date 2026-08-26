@@ -4,11 +4,19 @@ use OpenBKAdmin\OpenBeken;
 
 $OpenBeken = $container->get(OpenBeken::class);
 $devices = $OpenBeken->getDevices();
-$selectedIds = array_map('intval', $_POST['device'] ?? $_POST['devices'] ?? []);
-if (empty($selectedIds) && isset($_POST['device_id'])) {
-    $selectedIds = array_map('intval', (array) $_POST['device_id']);
+
+// The shared devices table posts selected rows as device_ids[].
+// Keep the older field names as fallbacks for compatibility.
+$rawSelectedIds = $_POST['device_ids'] ?? $_POST['device'] ?? $_POST['devices'] ?? [];
+if (empty($rawSelectedIds) && isset($_POST['device_id'])) {
+    $rawSelectedIds = (array) $_POST['device_id'];
 }
-$selected = array_values(array_filter($devices, static fn (Device $d) => in_array($d->id, $selectedIds, true)));
+$selectedIds = array_values(array_unique(array_map('intval', (array) $rawSelectedIds)));
+
+$selected = array_values(array_filter(
+    $devices,
+    static fn (Device $d) => in_array((int) $d->id, $selectedIds, true)
+));
 $targets = $_POST['update_targets'] ?? '{}';
 ?>
 <div class="container mt-4 update-page">
