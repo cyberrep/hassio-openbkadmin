@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.4.9**
+> Current add-on version: **0.5.1**
 
 ## Features
 
@@ -27,29 +27,18 @@ OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monit
 - Hide selected devices from the start page
 
 ### OpenBeken device information
-OpenBKAdmin can display information obtained from each physical device, including:
-- IP address and position
-- Short Name and Full Name
-- Chipset
-- Firmware version
-- Wi-Fi/RSSI information
-- Runtime
-- Channel/output names
-- Device state
-- Energy/telemetry information when exposed by the firmware
+OpenBKAdmin can display IP address, Short Name, Full Name, chipset, firmware version, Wi-Fi/RSSI, runtime, channel/output names, device state and supported telemetry.
 
 Firmware identification is separated into useful fields. For example, `OpenBK7231N_1.18.284` is displayed as chipset **BK7231N** and version **1.18.284**.
 
-### Multi-channel and channel-aware devices
-Multi-channel OpenBeken devices can be represented as individual controllable outputs while sharing one physical device/IP. OpenBKAdmin reuses information obtained from the physical device instead of unnecessarily querying the same IP separately for every channel.
-
-Channel-aware naming allows descriptive names such as `Luz - Cozinha - Balcão`. OpenBeken channel labels are used when available, with fallback to names exposed by the firmware.
+### Multi-channel devices
+Multi-channel OpenBeken devices can be represented as individual controllable outputs while sharing one physical device/IP. OpenBKAdmin reuses information obtained from the physical device instead of querying the same IP separately for every channel.
 
 ### Network Auto Scan
-Auto Scan supports configurable IP ranges and ports, validates discovered OpenBeken endpoints, lets you review results and can save multiple discovered devices in batch.
+Auto Scan supports configurable IP ranges and ports and validates discovered OpenBeken endpoints. Version 0.5.1 adds a more tolerant two-pass network probe and an OpenBeken-native discovery fallback using `/obkdevicelist`, the HTTP peer list exposed by the firmware SSDP `obkDeviceList` implementation.
 
 ### MQTT discovery
-MQTT-assisted discovery supports broker host, port, credentials, discovery subscriptions/timeouts and command/status/telemetry prefixes. Results distinguish updated, new and offline devices as well as topic conflicts; ambiguous MQTT topics are not automatically applied.
+MQTT-assisted discovery supports broker host, port, credentials, discovery subscriptions/timeouts and command/status/telemetry prefixes.
 
 ### Device configuration
 The interface exposes supported OpenBeken configuration including network, MQTT, timers, Wi-Fi/AP, power-on behavior, LED behavior, hostname, IP/gateway/subnet/DNS, MQTT topics/retain options and telemetry period.
@@ -64,13 +53,13 @@ The interface exposes supported OpenBeken configuration including network, MQTT,
 OpenBKAdmin firmware management is designed specifically around **OpenBeken**:
 - Manual firmware upload
 - Automatic firmware retrieval from the official OpenBeken GitHub releases
-- Chipset-aware firmware selection
+- Chipset-aware firmware selection for each physical device
 - Uses only the firmware asset identified as **OTA Update** for the device chipset
 - Compares installed and available firmware versions
 - Offers normal updates only when the official firmware is newer
 - Avoids automatic downgrade to an older release
-- Update selected devices
-- Graceful handling of temporary GitHub/network lookup failures
+- Updates multiple selected devices, resolving the correct OTA image per chipset
+- Uses the OpenBeken OTA command flow: `OtaUrl <url>` followed by `Upgrade 1`
 
 Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/releases
 
@@ -78,11 +67,9 @@ Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/rel
 The repository includes Home Assistant add-on packaging, NGINX + PHP-FPM runtime, direct Web UI access, persistent configuration/device data, repository metadata and dedicated OpenBKAdmin branding assets.
 
 ### Multilingual interface
-OpenBKAdmin retains the application's multilingual architecture. **Brazilian Portuguese (pt-BR) has been extensively reviewed and corrected** for OpenBKAdmin/OpenBeken terminology. OpenBeken-specific additions are integrated into the translation system for the available languages rather than being hard-coded into individual pages.
+OpenBKAdmin retains the application's multilingual architecture. Brazilian Portuguese (pt-BR) has been extensively reviewed for OpenBKAdmin/OpenBeken terminology.
 
 ## Help links
-
-The Help menu points to official OpenBeken resources:
 
 - **Documentation:** https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/README.md
 - **Commands:** https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/commands.md
@@ -96,9 +83,9 @@ Add this repository to the Home Assistant Add-on Store:
 
 `https://github.com/cyberrep/hassio-openbkadmin`
 
-Then open **Settings → Add-ons → Add-on Store → Repositories**, add the URL above, refresh the store, select **OpenBKAdmin**, install it and start the add-on.
+Then open **Settings → Add-ons → Add-on Store → Repositories**, add the repository, refresh the store, select **OpenBKAdmin**, install it and start the add-on.
 
-Once the repository is installed, publishing a newer version number in `openbkadmin/config.yaml` allows Home Assistant to detect the new add-on release and offer the normal **Update** workflow instead of requiring removal/reinstallation. Persistent add-on data is therefore preserved through normal upgrades.
+Publishing a newer version number in `openbkadmin/config.yaml` allows Home Assistant to detect the release and offer the normal **Update** workflow. Persistent add-on data is preserved through normal upgrades.
 
 ## Repository structure
 
@@ -121,36 +108,22 @@ hassio-openbkadmin/
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
 
-### 0.4.9
-- Official OpenBeken GitHub Releases integration for firmware updates
-- Chipset-aware **OTA Update** firmware selection
-- Firmware version comparison so normal updates are offered only for newer firmware
-- Removal of the obsolete `ota.openbeken.com` dependency
-- Better handling of GitHub/network firmware lookup failures
-- OpenBeken-focused updater cleanup
-
-### 0.4.8
-- New OpenBKAdmin visual identity
-- New Home Assistant add-on icon and full OpenBKAdmin logo
-- Brazilian Portuguese translation reviewed and consolidated
-- General packaging/repository improvements
-
-### 0.4.x
-Major OpenBeken-focused refactoring including OpenBKAdmin naming/branding, OpenBeken-specific device information, Full Name/Short Name support, multi-channel handling, channel-aware display names, chipset/version separation, Auto Scan, MQTT discovery, backup/restore, OpenBeken help links, translation expansion and Home Assistant packaging fixes.
+### 0.5.1
+- More reliable OpenBeken Auto Scan with two-pass probing
+- Native `/obkdevicelist` discovery fallback
+- Verified OpenBeken `OtaUrl` + `Upgrade 1` OTA flow
+- Round OpenBKAdmin navigation icon
+- Centered device-selection checkboxes
 
 ## Project status
 
 OpenBKAdmin is under active development. OpenBeken behavior can vary between devices, chipsets, templates and firmware versions, so some functionality depends on what a specific device exposes through its Web UI/API.
 
-Bug reports and reproducible device examples are welcome.
-
 ## Credits and upstream project
 
-**OpenBKAdmin is based on the TasmotaAdmin codebase.** The original TasmotaAdmin project provided the foundation from which the OpenBKAdmin project was adapted and developed:
+**OpenBKAdmin is based on the TasmotaAdmin codebase.** The original TasmotaAdmin project provided the foundation from which OpenBKAdmin was adapted and developed:
 
 https://github.com/TasmoAdmin/TasmoAdmin
-
-OpenBKAdmin substantially adapts that foundation for the **OpenBeken** ecosystem, including OpenBeken discovery, firmware/chipset handling, multi-channel behavior, configuration workflows, Home Assistant add-on packaging, translations and the OpenBKAdmin visual identity.
 
 OpenBeken / OpenBK7231T_App:
 
