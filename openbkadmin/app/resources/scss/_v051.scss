@@ -1,0 +1,35 @@
+/* OpenBKAdmin 0.5.1 UI fixes */
+#device-list th.cmd_cb,
+#device-list td.cmd_cb {
+  text-align: center;
+  vertical-align: middle;
+}
+
+#device-list th.cmd_cb .form-check,
+#device-list td.cmd_cb .form-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  min-height: 1.5rem;
+  margin: 0;
+  padding-left: 0;
+}
+
+#device-list th.cmd_cb .form-check-input,
+#device-list td.cmd_cb .form-check-input {
+  float: none;
+  margin: 0;
+  position: static;
+}
+
+#device-list th.cmd_cb .form-check-label {
+  margin: 0;
+}
+
+/* The navbar logo SVG clips the supplied OpenBKAdmin artwork to the round icon. */
+.navbar-brand.logo img {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
