@@ -1,12 +1,39 @@
 # OpenBKAdmin Changelog
 
+## [0.6.3] - 2026-08-26
+
+### MQTT discovery
+- Discovery no longer depends on the Tasmota TELE compatibility flag.
+- Uses OpenBeken native MQTT identity topics such as `<device>/connected`, `<device>/ip`, `<device>/rssi`, `<device>/uptime`, `<device>/freeheap`, `<device>/sockets`, `<device>/datetime`, `<device>/mac`, `<device>/build` and `<device>/host`.
+- Subscribes to the broker wildcard and internally filters documented OpenBeken native telemetry.
+- Requests `<device>/ip/get` after detecting a native OpenBeken base topic.
+- Keeps Tasmota-compatible TELE/STAT discovery only as a fallback.
+- Clarifies that `MqttGroup` / Group Topic is a command group and is not a reliable per-device discovery mechanism.
+
+### Portuguese interface
+- Firmware update result/summary texts are now localized instead of being hard-coded in English.
+- Added pt-BR strings for selected devices, execution mode, backup status, OTA safety errors and related firmware-update messages.
+
+### Changelog
+- Added the missing 0.6.2 release entry and kept the full recent release history visible in Home Assistant.
+
+## [0.6.2] - 2026-08-26
+
+### MQTT discovery
+- Expanded native OpenBeken detection beyond `connected` and `ip` to documented native telemetry topics.
+- MQTT scan listens long enough to cover the default OpenBeken periodic broadcast interval.
+- Discovery requests the device IP using the native `<device>/ip/get` topic.
+
+### Interface
+- Footer now shows the add-on version after the two project links: `OpenBKAdmin GitHub - OpenBeken GitHub - Version x.x.x`.
+
 ## [0.6.1] - 2026-08-26
 
 ### MQTT discovery
 - Improved MQTT discovery for the native OpenBeken topic layout.
 - Native discovery recognizes `<device-topic>/connected` and `<device-topic>/ip` topics.
 - Requests `<device-topic>/ip/get` when an IP address is not yet known.
-- Uses a broad MQTT subscription with internal filtering so nested topics such as `openbeken/luz_cozinha` can be discovered.
+- Uses a broad MQTT subscription with internal filtering so nested topics can be discovered.
 - Keeps Tasmota-compatible `tele`, `stat` and `cmnd` discovery behavior as a fallback.
 - Default discovery timeout increased from 5 to 15 seconds.
 - Existing `tele/+/LWT` discovery configuration is migrated to the broader native discovery mode.
@@ -17,7 +44,7 @@
 ## [0.5.8] - 2026-08-26
 
 ### Firmware update
-- OTA device headings now show only the numeric installed firmware version (for example `1.18.302`) while chipset remains a separate field.
+- OTA device headings now show only the numeric installed firmware version while chipset remains a separate field.
 - OTA heading labels reuse the existing localization keys so Device, Chipset and Version follow the selected interface language.
 - Portuguese localization remains based on the reviewed pt-BR translation set.
 
