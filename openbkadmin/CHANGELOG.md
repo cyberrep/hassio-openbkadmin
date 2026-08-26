@@ -1,5 +1,19 @@
 # OpenBKAdmin Changelog
 
+## [0.6.1] - 2026-08-26
+
+### MQTT discovery
+- Improved MQTT discovery for the native OpenBeken topic layout.
+- Native discovery recognizes `<device-topic>/connected` and `<device-topic>/ip` topics.
+- Requests `<device-topic>/ip/get` when an IP address is not yet known.
+- Uses a broad MQTT subscription with internal filtering so nested topics such as `openbeken/luz_cozinha` can be discovered.
+- Keeps Tasmota-compatible `tele`, `stat` and `cmnd` discovery behavior as a fallback.
+- Default discovery timeout increased from 5 to 15 seconds.
+- Existing `tele/+/LWT` discovery configuration is migrated to the broader native discovery mode.
+
+### Interface
+- Removed the redundant SelfUpdate entry from the main navigation for the Home Assistant add-on workflow.
+
 ## [0.5.8] - 2026-08-26
 
 ### Firmware update
@@ -39,66 +53,8 @@
 
 ## [0.5.4] - 2026-08-26
 
-### Device state
-- Multi-channel OpenBeken devices now use channel-aware state instead of blindly sharing one Tasmota-compatible POWER value.
-
 ### Firmware update
-- Official firmware is queried after device selection and required chipset OTA assets are resolved together.
-- Added release metadata caching to reduce GitHub API rate-limit failures.
-- Selected-device summary shows Full Name, detected chipset and IP.
-
-### Branding
-- Updated navigation/favicons for OpenBKAdmin branding.
-
-## [0.5.3] - 2026-08-26
-
-### Firmware update safety
-- Official Release mode detects each selected physical device chipset automatically.
-- Mixed-chipset selections resolve the correct official OTA image independently.
-- Automatic flashing is blocked when chipset/OTA target cannot be resolved safely.
-
-### Device identity
-- Firmware update logs prefer the live OpenBeken Full Name.
-
-## [0.5.1] - 2026-08-26
-
-### Firmware update
-- Verified the OpenBeken OTA flow and chipset-aware official OTA selection.
-
-### Device discovery
-- Improved Auto Scan with two-pass probing and `/obkdevicelist` fallback.
-
-### Interface and branding
-- Round OpenBKAdmin navigation icon and centered device-selection checkboxes.
-
-## [0.5.0] - 2026-08-26
-
-- Fixed device-selection handoff to firmware update.
-- Simplified firmware UI to OpenBeken-oriented Official Release and Local Firmware workflows.
-- OTA server defaults to the reachable Home Assistant/OpenBKAdmin host.
-
-## [0.4.9] - 2026-08-26
-
-- Replaced obsolete OTA source with official OpenBeken GitHub Releases.
-- Added chipset-aware OTA selection, version comparison and downgrade protection.
-- Improved GitHub/network error handling and OpenBeken-specific terminology.
-
-## [0.4.8]
-
-- Introduced dedicated OpenBKAdmin branding.
-- Brazilian Portuguese translation extensively reviewed.
-- Home Assistant packaging improvements.
-
-## [0.4.x]
-
-Major OpenBeken-focused refactoring: OpenBKAdmin branding, OpenBeken detection, Short/Full Name support, multi-channel handling, chipset/firmware information, Auto Scan, MQTT discovery, backup/restore, help links, localization and Home Assistant add-on fixes.
-
-## [0.3.x]
-
-Foundation work for the Home Assistant/OpenBeken adaptation.
-
----
-
-OpenBKAdmin is based on the **TasmotaAdmin** codebase: https://github.com/TasmoAdmin/TasmoAdmin
-
-OpenBeken / OpenBK7231T_App: https://github.com/openshwprojects/OpenBK7231T_App
+- Improved channel-aware state handling.
+- Reduced OpenBeken GitHub release lookups with caching.
+- Added selected-device summary before OTA.
+- Improved OpenBKAdmin branding/favicon handling.
