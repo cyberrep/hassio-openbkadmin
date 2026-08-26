@@ -10,7 +10,7 @@
 				<a href='https://github.com/cyberrep/hassio-openbkadmin' target='_blank' rel='noopener noreferrer'>OpenBKAdmin GitHub</a>
 				-
 				<a href='https://github.com/openshwprojects/OpenBK7231T_App' target='_blank' rel='noopener noreferrer'>OpenBeken GitHub</a>
-				- Version 0.6.2
+				- Version 0.6.4
 			</span>
 		</div>
 	</div>
