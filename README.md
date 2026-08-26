@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.5.8**
+> Current add-on version: **0.6.1**
 
 ## Features
 
@@ -38,7 +38,7 @@ Multi-channel OpenBeken devices can be represented as individual controllable ou
 Auto Scan supports configurable IP ranges and ports and validates discovered OpenBeken endpoints. It includes a tolerant two-pass network probe and OpenBeken-native discovery fallback using `/obkdevicelist`.
 
 ### MQTT discovery
-MQTT-assisted discovery supports broker host, port, credentials, discovery subscriptions/timeouts and command/status/telemetry prefixes.
+MQTT-assisted discovery supports broker host, port, credentials and discovery timeout. Native OpenBeken MQTT discovery listens broadly and recognizes OpenBeken topics such as `<device-topic>/connected` and `<device-topic>/ip`, requesting the IP when needed. Tasmota-compatible discovery topics remain available as a fallback.
 
 ### Device configuration
 The interface exposes supported OpenBeken configuration including network, MQTT, timers, Wi-Fi/AP, power-on behavior, LED behavior, hostname, IP/gateway/subnet/DNS, MQTT topics/retain options and telemetry period.
@@ -115,6 +115,15 @@ hassio-openbkadmin/
 ## Changelog
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
+
+### 0.6.1
+- Improved MQTT discovery for native OpenBeken topic layout
+- Native discovery recognizes `<device-topic>/connected` and `<device-topic>/ip`
+- Requests device IP through MQTT when necessary
+- Broad MQTT subscription with internal OpenBeken filtering
+- Default MQTT discovery timeout increased to 15 seconds
+- Legacy `tele/+/LWT` discovery configuration migrates to the native discovery mode
+- Removed the redundant SelfUpdate entry from the main add-on navigation
 
 ### 0.5.8
 - OTA device heading shows chipset separately and only the numeric installed firmware version
