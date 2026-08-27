@@ -1,5 +1,28 @@
 # OpenBKAdmin Changelog
 
+## [0.7.0] - 2026-08-27
+
+### Complete pre-OTA backups
+- Added automatic LittleFS filesystem backup before OTA in addition to the existing OpenBeken configuration `.dmp`.
+- Uses OpenBeken's native LittleFS REST interface (`GET /api/lfs/<path>`) to enumerate directories and download every filesystem file.
+- Builds a downloadable `.fs.tar` archive containing `autoexec.bat` and other LittleFS files.
+- Keeps configuration dump and filesystem TAR together as one timestamped backup set per physical device.
+- Keeps only the two newest backup sets per device automatically.
+- Backup failures are reported independently for configuration and filesystem, so one successful backup is not hidden by failure of the other.
+
+### Backups page
+- Added grouped Configuration and Filesystem downloads by device and timestamp.
+- Filesystem TAR can be downloaded directly from OpenBKAdmin.
+- Delete removes both files belonging to the selected backup set.
+- Older/unmatched backups remain visible separately instead of being silently removed.
+
+### Upstream implementation review
+- Confirmed in OpenBeken source that LittleFS is exposed through `GET /api/lfs/<path>` and directory requests return JSON listings while file requests return raw file bytes.
+- This provides the same filesystem content needed to preserve `autoexec.bat` without relying on the browser Web App.
+
+### Release metadata
+- Add-on metadata, footer, README and changelog synchronized to 0.7.0.
+
 ## [0.6.9] - 2026-08-27
 
 ### BL602 / BL616 Web App OTA
@@ -44,7 +67,7 @@
 
 ### Device information
 - Wi-Fi percentage is normalized and clamped to 0-100%, including OpenBeken targets that report RSSI as dBm.
-- Runtime values such as `0T04:13:55` are normalized to the normal OpenBKAdmin duration format.
+- Runtime values such as `0T04:13:55` are normalized for display.
 - Runtime falls back to OpenBeken uptime when a valid startup timestamp is not available.
 
 ### Device names
