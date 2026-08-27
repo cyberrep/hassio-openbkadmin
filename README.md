@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.6.4**
+> Current add-on version: **0.6.5**
 
 ## Features
 
@@ -22,70 +22,62 @@ OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monit
 - Short and detailed device-list views
 - Select visible columns
 - Optional confirmation before switching outputs
-- Protection options for switching on/off
-- Include devices in **ALL OFF**
-- Hide selected devices from the start page
+- Include devices in **ALL OFF** and hide selected devices from the start page
 
 ### OpenBeken device information
-OpenBKAdmin can display IP address, Short Name, Full Name, chipset, firmware version, Wi-Fi/RSSI, runtime, channel/output names, device state and supported telemetry.
+OpenBKAdmin displays IP address, Full Name, chipset, firmware version, Wi-Fi/RSSI, runtime, channel/output names, device state and supported telemetry. Firmware strings such as `OpenBK7231N_1.18.302` are separated into chipset **BK7231N** and version **1.18.302**.
 
-Firmware identification is separated into useful fields. For example, `OpenBK7231N_1.18.284` is displayed as chipset **BK7231N** and version **1.18.284**.
+### Device state
+Version 0.6.5 aligns state handling with the upstream OpenBeken implementation. OpenBKAdmin reads `POWER` / `POWERx` from `Status 0`; OpenBeken itself generates these values from `CHANNEL_Get()` for relay/toggle channels. Multi-output rows therefore use `POWER1`, `POWER2`, etc., while single-output devices use `POWER`.
+
+The previous experimental `Ch` read was removed because upstream defines `ChN value` as a channel **SET** command, not a read-all command. The list keeps a switch for every configured row: blue/checked represents ON, gray represents OFF, and the existing red/error presentation represents a device that could not be contacted.
 
 ### Multi-channel devices
-Multi-channel OpenBeken devices can be represented as individual controllable outputs while sharing one physical device/IP. OpenBKAdmin reuses physical-device information for rows that share the same IP. Device state prefers native OpenBeken channel values, mapping relay/output rows to their corresponding channels (`Channel0`, `Channel1`, etc.) instead of relying only on the Tasmota-compatible `Status 0` POWER field.
+Multi-channel devices are represented as individual controllable outputs while sharing one physical device/IP. Physical status is requested once and each logical row resolves its matching POWER index.
 
 ### Network Auto Scan
-Auto Scan supports configurable IP ranges and ports and validates discovered OpenBeken endpoints. It includes a tolerant two-pass network probe and OpenBeken-native discovery fallback using `/obkdevicelist`.
+Auto Scan supports configurable IP ranges and ports, two-pass probing and OpenBeken-native discovery fallback using `/obkdevicelist`.
 
 ### MQTT discovery
-MQTT-assisted discovery supports broker host, port, credentials and discovery timeout. Native OpenBeken discovery listens broadly for per-device base topics and recognizes native identity/telemetry topics such as `<device>/connected`, `<device>/ip`, `<device>/rssi`, `<device>/uptime`, `<device>/freeheap`, `<device>/sockets`, `<device>/datetime`, `<device>/mac`, `<device>/build` and `<device>/host`. When a device base topic is detected but its address is not yet known, OpenBKAdmin requests `<device>/ip/get`.
+MQTT-assisted discovery recognizes OpenBeken native per-device topics such as `<device>/connected`, `<device>/ip`, `<device>/rssi`, `<device>/uptime`, `<device>/freeheap`, `<device>/sockets`, `<device>/datetime`, `<device>/mac`, `<device>/build` and `<device>/host`. When needed it requests `<device>/ip/get`.
 
-Discovery does **not** require the Tasmota TELE compatibility flag. Tasmota-compatible TELE/STAT discovery remains only as a fallback and STATUS responses are validated so actual Tasmota devices are not imported as OpenBeken devices. OpenBeken `MqttGroup` / Group Topic is treated as a shared command group, not as a reliable per-device discovery identifier.
-
-### Device configuration
-The interface exposes supported OpenBeken configuration including network, MQTT, timers, Wi-Fi/AP, power-on behavior, LED behavior, hostname, IP/gateway/subnet/DNS, MQTT topics/retain options and telemetry period.
+Discovery does **not** require the Tasmota TELE compatibility flag. Tasmota TELE/STAT remains only as a validated fallback so real Tasmota devices are not imported. `MqttGroup` / Group Topic is treated as a shared command group, not per-device identity.
 
 ### Backup and restore
-- Create and download device backups
-- Restore OpenBeken `.dmp` backups
-- Validate invalid/wrong backup files
-- Warn before restoring settings that may change network or MQTT accessibility
-- Before OTA, automatically create a timestamped configuration dump for every unique selected physical device
-- OTA backup filenames include the OpenBKAdmin device ID/name
-- LittleFS files such as `autoexec.bat` are treated separately and are not silently restored
+- Create/download device backups and restore OpenBeken `.dmp` backups
+- Pre-OTA timestamped configuration dump for every unique selected physical device
+- Backup filename includes OpenBKAdmin device ID/name
+- LittleFS files such as `autoexec.bat` are separate and are not silently restored
 
 ### Firmware updates
-OpenBKAdmin firmware management is designed specifically around **OpenBeken**:
-- Manual firmware upload
-- Automatic firmware retrieval from the official OpenBeken GitHub releases
-- Automatic chipset detection for selected physical devices
-- Chipset-aware firmware selection for each physical device
-- Uses only the firmware asset identified as **OTA Update** for the detected chipset
-- Compares installed and available firmware versions
-- Offers normal updates only when the official firmware is newer
-- Avoids automatic downgrade
-- Supports mixed-chipset selections
-- Shows selected device Full Name, chipset, numeric current firmware version and IP
-- Caches release metadata to reduce GitHub API rate-limit failures
-- Supports **Mass** parallel OTA and **Individual** sequential OTA modes
-- Limits post-OTA status verification to five attempts per device
-- Creates a pre-OTA configuration backup before flashing
+OpenBKAdmin firmware management includes:
+- Manual firmware upload and official OpenBeken GitHub release retrieval
+- Automatic chipset detection and chipset-aware firmware selection
+- Numeric installed/target firmware comparison and downgrade protection
+- Mixed-chipset selections
+- Selected-device Full Name, chipset, firmware and IP summary
+- Cached release metadata to reduce GitHub API rate-limit failures
+- **Mass** parallel and **Individual** sequential OTA modes
+- Maximum five post-OTA status checks per device
+- Automatic pre-OTA configuration backup
+- **BL602 / BL616 native Web App OTA** through OpenBeken `POST /api/ota`
+
+For BL602/BL616, OpenBKAdmin downloads the selected OTA image server-side and streams it to the device's native `/api/ota` endpoint. This matches the Web App update path and avoids browser CORS restrictions. Other supported platforms continue using the existing `ota_http` flow.
 
 Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/releases
 
 ### Home Assistant add-on
-The repository includes Home Assistant add-on packaging, NGINX + PHP-FPM runtime, direct Web UI access, persistent configuration/device data, repository metadata and dedicated OpenBKAdmin branding assets.
+The repository includes Home Assistant add-on packaging, NGINX + PHP-FPM runtime, direct Web UI access, persistent configuration/device data, repository metadata and OpenBKAdmin branding assets.
 
 ### Multilingual interface
-OpenBKAdmin retains the application's multilingual architecture. Brazilian Portuguese (pt-BR) has been extensively reviewed for OpenBKAdmin/OpenBeken terminology.
+OpenBKAdmin retains the multilingual architecture. Brazilian Portuguese (pt-BR) is the reviewed Portuguese translation baseline.
 
 ## Help links
 
-- **Documentation:** https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/README.md
-- **Commands:** https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/commands.md
-- **Templates / Devices List:** https://openbekeniot.github.io/webapp/devicesList.html
-- **FAQ:** https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/faq.md
-- **Forum:** https://www.elektroda.com/rtvforum/forums.html
+- Documentation: https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/README.md
+- Commands: https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/commands.md
+- Templates / Devices List: https://openbekeniot.github.io/webapp/devicesList.html
+- FAQ: https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/faq.md
 
 ## Installation in Home Assistant
 
@@ -93,9 +85,7 @@ Add this repository to the Home Assistant Add-on Store:
 
 `https://github.com/cyberrep/hassio-openbkadmin`
 
-Then open **Settings → Add-ons → Add-on Store → Repositories**, add the repository, refresh the store, select **OpenBKAdmin**, install it and start the add-on.
-
-Publishing a newer version number in `openbkadmin/config.yaml` allows Home Assistant to detect the release and offer the normal **Update** workflow. Persistent add-on data is preserved through normal upgrades.
+Then open **Settings → Add-ons → Add-on Store → Repositories**, add the repository, refresh the store, select **OpenBKAdmin**, install it and start the add-on. Publishing a newer version in `openbkadmin/config.yaml` makes Home Assistant offer the normal update workflow while persistent add-on data is preserved.
 
 ## Repository structure
 
@@ -118,78 +108,61 @@ hassio-openbkadmin/
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
 
+### 0.6.5
+- Corrected ON/OFF state handling using OpenBeken's upstream `Status 0` POWER/POWERx generation
+- Removed invalid `Ch` read-all behavior
+- Kept switches for every row with normal ON/OFF/offline visual states
+- Added native BL602/BL616 Web App OTA through `POST /api/ota`
+- Added server-side OTA proxy so the browser does not depend on device CORS
+- Retained pre-OTA backup, Mass/Individual modes and five post-update checks
+
 ### 0.6.4
 - Improved native OpenBeken MQTT discovery based on per-device base topics
 - Discovery no longer requires the Tasmota TELE compatibility flag
-- Native MQTT discovery uses OpenBeken identity/telemetry topics and requests `<device>/ip/get` when needed
-- Tasmota STATUS replies are filtered so real Tasmota devices are not imported as OpenBeken
-- Clarified that `MqttGroup` / Group Topic is a command group rather than a per-device discovery identifier
-- Improved channel-aware ON/OFF state handling using native OpenBeken channel mapping
+- Tasmota STATUS replies filtered so real Tasmota devices are not imported
+- Clarified `MqttGroup` as a command group rather than per-device identity
 
 ### 0.6.3
 - Expanded native MQTT discovery to documented OpenBeken telemetry topics
-- Added OpenBeken/Tasmota validation for compatibility STATUS responses
 - Localized additional firmware-update and backup messages in pt-BR
-- Restored missing recent changelog history
 
 ### 0.6.2
-- Expanded native OpenBeken MQTT detection beyond `connected` and `ip`
-- MQTT scan listens long enough for periodic native OpenBeken broadcasts
+- Expanded native OpenBeken MQTT detection and `<device>/ip/get`
 - Footer shows the running OpenBKAdmin version
 
 ### 0.6.1
-- Improved MQTT discovery for native OpenBeken topic layout
-- Native discovery recognizes `<device-topic>/connected` and `<device-topic>/ip`
-- Requests device IP through MQTT when necessary
-- Broad MQTT subscription with internal OpenBeken filtering
-- Removed the redundant SelfUpdate entry from the main add-on navigation
+- Improved native MQTT discovery and removed redundant SelfUpdate navigation
 
 ### 0.5.8
-- OTA device heading shows chipset separately and only the numeric installed firmware version
-- OTA heading labels use the existing multilingual translation keys
-- Reviewed pt-BR remains the Portuguese translation baseline
+- Numeric firmware version in OTA headings and multilingual labels
 
 ### 0.5.7
-- Native OpenBeken `Ch` channel values used for ON/OFF state
-- Pre-OTA configuration backup for each unique physical device
-- Timestamped backup names containing device identity
-- LittleFS/`autoexec.bat` explicitly kept separate from automatic config restore
-- Mass and Individual OTA modes retained with five post-OTA checks
+- Pre-OTA configuration backup and LittleFS/autoexec separation
 
 ### 0.5.6
-- Added Mass (parallel) and Individual (sequential) OTA modes
-- Reduced post-OTA verification to five attempts
-- Added `.ota` local firmware support
+- Mass/Individual OTA modes, five verification attempts and `.ota` upload support
+
+### 0.5.5
+- Full Name and firmware/chipset metadata in update selection/logs
 
 ### 0.5.4
-- Improved channel-aware state handling
-- Reduced OpenBeken GitHub release lookups with caching
-- Selected-device summary before OTA
-- Branding/favicon improvements
+- Improved state handling, release caching, selected-device summary and branding
 
 ### 0.5.1
-- More reliable OpenBeken Auto Scan with two-pass probing
-- Native `/obkdevicelist` discovery fallback
-- Verified OpenBeken OTA flow
-- Round OpenBKAdmin navigation icon
-- Centered device-selection checkboxes
+- Two-pass Auto Scan, `/obkdevicelist` fallback, OTA flow, icon and checkbox improvements
 
 ## Project status
 
-OpenBKAdmin is under active development. OpenBeken behavior can vary between devices, chipsets, templates and firmware versions, so some functionality depends on what a specific device exposes through its Web UI/API.
+OpenBKAdmin is under active development. OpenBeken behavior can vary between devices, chipsets, templates and firmware versions.
 
-## Credits and upstream project
+## Credits
 
-**OpenBKAdmin is based on the TasmotaAdmin codebase.** The original TasmotaAdmin project provided the foundation from which OpenBKAdmin was adapted and developed:
+OpenBKAdmin is based on the TasmotaAdmin codebase and adapted for OpenBeken.
 
-https://github.com/TasmoAdmin/TasmoAdmin
+TasmotaAdmin: https://github.com/TasmoAdmin/TasmoAdmin
 
-OpenBeken / OpenBK7231T_App:
-
-https://github.com/openshwprojects/OpenBK7231T_App
-
-Many thanks to both upstream communities and contributors whose work made this project possible.
+OpenBeken / OpenBK7231T_App: https://github.com/openshwprojects/OpenBK7231T_App
 
 ## License
 
-See the license files included in this repository. The repository retains the applicable upstream TasmotaAdmin GPL licensing notice together with the OpenBKAdmin add-on licensing information and notices for other upstream components used by the project.
+See the license files included in this repository.
