@@ -60,24 +60,84 @@ function obkFsCollect(Device $device, string $dir = ''): array
     return $files;
 }
 
+function obkTarOctal(int $value, int $length): string
+{
+    return str_pad(decoct(max(0, $value)), $length - 1, '0', STR_PAD_LEFT)."\0";
+}
+
+function obkTarHeader(string $path, int $size, int $mtime): string
+{
+    $path = str_replace('\\', '/', ltrim($path, '/'));
+    $name = $path;
+    $prefix = '';
+    if (strlen($name) > 100) {
+        $cut = strrpos(substr($name, 0, 155), '/');
+        if ($cut === false) throw new RuntimeException('LittleFS path is too long for TAR: '.$path);
+        $prefix = substr($name, 0, $cut);
+        $name = substr($name, $cut + 1);
+        if (strlen($name) > 100 || strlen($prefix) > 155) throw new RuntimeException('LittleFS path is too long for TAR: '.$path);
+    }
+
+    $header = str_pad($name, 100, "\0");
+    $header .= obkTarOctal(0644, 8);
+    $header .= obkTarOctal(0, 8);
+    $header .= obkTarOctal(0, 8);
+    $header .= obkTarOctal($size, 12);
+    $header .= obkTarOctal($mtime, 12);
+    $header .= str_repeat(' ', 8);
+    $header .= '0';
+    $header .= str_repeat("\0", 100);
+    $header .= "ustar\0";
+    $header .= '00';
+    $header .= str_pad('openbkadmin', 32, "\0");
+    $header .= str_pad('openbkadmin', 32, "\0");
+    $header .= obkTarOctal(0, 8);
+    $header .= obkTarOctal(0, 8);
+    $header .= str_pad($prefix, 155, "\0");
+    $header .= str_repeat("\0", 12);
+    $header = substr($header, 0, 512);
+
+    $checksum = 0;
+    for ($i = 0; $i < 512; $i++) $checksum += ord($header[$i]);
+    $checksumField = str_pad(decoct($checksum), 6, '0', STR_PAD_LEFT)."\0 ";
+    return substr_replace($header, $checksumField, 148, 8);
+}
+
+function obkWriteTar(string $targetPath, array $files): void
+{
+    $fh = @fopen($targetPath, 'wb');
+    if ($fh === false) throw new RuntimeException('Could not open filesystem TAR for writing');
+    try {
+        $mtime = time();
+        foreach ($files as $path => $content) {
+            $content = (string) $content;
+            $size = strlen($content);
+            if (fwrite($fh, obkTarHeader((string) $path, $size, $mtime)) !== 512) throw new RuntimeException('Could not write TAR header for '.$path);
+            if ($size > 0 && fwrite($fh, $content) !== $size) throw new RuntimeException('Could not write TAR data for '.$path);
+            $padding = (512 - ($size % 512)) % 512;
+            if ($padding && fwrite($fh, str_repeat("\0", $padding)) !== $padding) throw new RuntimeException('Could not pad TAR entry '.$path);
+        }
+        if (fwrite($fh, str_repeat("\0", 1024)) !== 1024) throw new RuntimeException('Could not finalize filesystem TAR');
+    } finally {
+        fclose($fh);
+    }
+}
+
 function obkCreateFilesystemTar(Device $device, string $targetPath): array
 {
     $files = obkFsCollect($device, '');
-    if (empty($files)) {
-        throw new RuntimeException('LittleFS is empty or unavailable');
-    }
+    if (empty($files)) throw new RuntimeException('LittleFS is empty or unavailable');
 
     if (file_exists($targetPath)) @unlink($targetPath);
     try {
-        $tar = new PharData($targetPath);
-        foreach ($files as $path => $content) $tar->addFromString($path, $content);
-        unset($tar);
+        obkWriteTar($targetPath, $files);
     } catch (Throwable $e) {
         @unlink($targetPath);
         throw new RuntimeException('Could not create filesystem TAR: '.$e->getMessage(), 0, $e);
     }
 
-    if (!is_file($targetPath) || filesize($targetPath) <= 0) {
+    if (!is_file($targetPath) || filesize($targetPath) <= 1024) {
+        @unlink($targetPath);
         throw new RuntimeException('Filesystem TAR was not created');
     }
     return ['file' => $targetPath, 'count' => count($files), 'size' => filesize($targetPath)];
