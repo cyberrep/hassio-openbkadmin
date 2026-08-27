@@ -1,6 +1,15 @@
 # OpenBKAdmin Changelog
 
-## [0.6.7] - 2026-08-26
+## [0.6.7] - 2026-08-27
+
+### BL602 / BL616 OTA hotfix
+- Reimplemented the native Web App OTA proxy after testing showed BL602 remained on the old firmware.
+- Sends the official `OpenBL602_*_OTA.bin.xz.ota` file as the raw body of `POST /api/ota`, matching OpenBeken's REST implementation.
+- Disables HTTP `Expect: 100-Continue` for compatibility with OpenBeken's embedded HTTP server.
+- Validates the BL602 `BL60X_OTA` header before touching the device.
+- Requires OpenBeken to confirm the exact number of bytes written before reporting upload success.
+- Calls native `POST /api/reboot` only after the complete OTA image has been confirmed, because the BL602 OTA writer updates the boot partition table but does not itself invoke the reboot routine.
+- OTA log now shows the confirmed byte count and reboot request, making transport failures visible immediately instead of waiting for five version checks.
 
 ### Device editor
 - Device heading now shows `Device ID - Full Name` with a stored-name fallback when the live native name is unavailable.
