@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.7.3**
+> Current add-on version: **0.7.4**
 
 ## Features
 
@@ -33,23 +33,16 @@ OpenBKAdmin separates OpenBeken naming concepts in the device editor:
 - **Short Name** is the short/MQTT device name and is read/written with OpenBeken `ShortName`.
 - **Channel Name** is the individual output label and is written with OpenBeken `SetChannelLabel`.
 
-The editor heading uses `Device ID - Full Name`. Multi-channel devices have a dedicated Channels section rather than mixing physical-device identity with channel names.
-
 ### Device state
-OpenBKAdmin reads `POWER` / `POWERx` from `Status 0`; OpenBeken itself generates these values from `CHANNEL_Get()` for relay/toggle channels. Multi-output rows use `POWER1`, `POWER2`, etc., while single-output devices use `POWER`.
+OpenBKAdmin reads `POWER` / `POWERx` from `Status 0`. Multi-output rows use their matching POWER index while single-output devices use `POWER`.
 
-The list keeps a switch for every configured row: blue/checked represents ON, gray represents OFF, and the existing red/error presentation represents a device that could not be contacted.
-
-### Multi-channel devices
-Multi-channel devices are represented as individual controllable outputs while sharing one physical device/IP. Physical status is requested once and each logical row resolves its matching POWER index.
+The list keeps a switch for every configured row: blue/checked represents ON, gray represents OFF, and red/error represents a device that could not be contacted.
 
 ### Network Auto Scan
 Auto Scan supports configurable IP ranges and ports, two-pass probing and OpenBeken-native discovery fallback using `/obkdevicelist`.
 
 ### MQTT discovery
-MQTT-assisted discovery recognizes OpenBeken native per-device topics such as `<device>/connected`, `<device>/ip`, `<device>/rssi`, `<device>/uptime`, `<device>/freeheap`, `<device>/sockets`, `<device>/datetime`, `<device>/mac`, `<device>/build` and `<device>/host`. When needed it requests `<device>/ip/get`.
-
-Discovery does **not** require the Tasmota TELE compatibility flag. Tasmota TELE/STAT remains only as a validated fallback so real Tasmota devices are not imported. `MqttGroup` / Group Topic is treated as a shared command group, not per-device identity.
+MQTT-assisted discovery recognizes OpenBeken native per-device topics such as `<device>/connected`, `<device>/ip`, `<device>/rssi`, `<device>/uptime`, `<device>/freeheap`, `<device>/sockets`, `<device>/datetime`, `<device>/mac`, `<device>/build` and `<device>/host`. Tasmota-compatible discovery remains only as a validated fallback.
 
 ### Backup and restore
 - Create/download device configuration backups and restore OpenBeken `.dmp` backups
@@ -57,8 +50,8 @@ Discovery does **not** require the Tasmota TELE compatibility flag. Tasmota TELE
 - **Configuration backup (`.dmp`)** preserves the OpenBeken configuration dump
 - **Filesystem backup (`.fs.tar`)** preserves the complete LittleFS contents, including `autoexec.bat`
 - Uses OpenBeken's native `/api/lfs/` REST filesystem interface
+- Filesystem TAR archives are generated directly in standard USTAR format and do not depend on PHP `PharData`
 - Backups page groups Configuration and Filesystem files by device and timestamp
-- Click either file to download it; delete removes the complete backup set
 - Automatically retains the **2 newest backup sets per device**
 
 ### Firmware updates
@@ -66,16 +59,14 @@ OpenBKAdmin firmware management includes:
 - Manual firmware upload and official OpenBeken GitHub release retrieval
 - Selection from recent official OpenBeken releases
 - Automatic chipset detection and chipset-aware firmware selection
-- Numeric installed/target firmware comparison and downgrade protection
 - Mixed-chipset selections
-- Selected-device Full Name, chipset, firmware and IP summary
-- Cached release metadata to reduce GitHub API rate-limit failures
 - **Mass** parallel and **Individual** sequential OTA modes
-- Maximum five post-OTA status checks per device
+- Initial 30-second reboot wait after triggering OTA
+- Maximum **5 post-OTA status checks**, with **30 seconds between attempts**
 - Automatic pre-OTA configuration + LittleFS backup
 - **BL602 / BL616 native Web App OTA** through OpenBeken `POST /api/ota`
 
-For BL602/BL616, OpenBKAdmin sends the actual official `OpenBL602_*_OTA.bin.xz.ota` bytes as the raw request body to the device's native `/api/ota` endpoint, matching OpenBeken's Web App/REST implementation. The firmware already downloaded into `/data/firmwares/` is used directly, avoiding a loopback HTTP request to the add-on itself. The BL60X OTA header and byte count returned by the device are validated before reboot. Other supported platforms continue using the existing `ota_http` flow.
+For BL602/BL616, OpenBKAdmin sends the actual official OTA bytes as the raw request body to the device's native `/api/ota` endpoint. Other supported platforms continue using the existing `ota_http` flow.
 
 Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/releases
 
@@ -83,7 +74,7 @@ Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/rel
 The repository includes Home Assistant add-on packaging, NGINX + PHP-FPM runtime, direct Web UI access, persistent configuration/device data, repository metadata and OpenBKAdmin branding assets.
 
 ### Multilingual interface
-OpenBKAdmin retains the multilingual architecture. New OpenBKAdmin features must provide translations for every supported interface language. Brazilian Portuguese (pt-BR) remains the reviewed Portuguese translation baseline.
+New OpenBKAdmin user-facing features must provide translations for every supported interface language. Brazilian Portuguese (pt-BR) remains the reviewed Portuguese translation baseline.
 
 ## Installation in Home Assistant
 
@@ -91,56 +82,45 @@ Add this repository to the Home Assistant Add-on Store:
 
 `https://github.com/cyberrep/hassio-openbkadmin`
 
-Then open **Settings → Add-ons → Add-on Store → Repositories**, add the repository, refresh the store, select **OpenBKAdmin**, install it and start the add-on. Publishing a newer version in `openbkadmin/config.yaml` makes Home Assistant offer the normal update workflow while persistent add-on data is preserved.
+Then open **Settings → Add-ons → Add-on Store → Repositories**, add the repository, refresh the store, select **OpenBKAdmin**, install it and start the add-on.
 
 ## Changelog
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
 
+### 0.7.4
+- Post-OTA verification remains limited to 5 attempts but now waits 30 seconds between attempts
+- Reworked LittleFS `.fs.tar` generation without `PharData`
+- Filesystem backups are written as standard USTAR archives and include `autoexec.bat` and other LittleFS files
+- Added TAR finalization/size validation so incomplete archives are rejected
+- Release metadata synchronized for Home Assistant update detection
+
 ### 0.7.3
 - Fixed the fatal error after choosing an official OpenBeken release
 - Official-release selection now proceeds normally to device selection
-- Release metadata updated so Home Assistant detects this correction as a new add-on update
 
 ### 0.7.2
 - Added recent official OpenBeken release selection to the OTA screen
-- Chipset continues to be detected and verified automatically for each selected physical device
-- Improved OTA update workflow and backup integration
+- Chipset is detected and verified automatically for each selected physical device
 
 ### 0.7.1
-- Backups navigation and Backups page are translated for every supported UI language
-- New pre-OTA backup messages, errors, labels and status text are translated
-- Centralized translations added for cs, de, en, es, fr, he, hu, it, nl, pl, pt-BR, ru and zh-TW
-- New project rule: new user-facing features must include all supported languages
+- Backup UI and pre-OTA messages translated for all supported languages
 
 ### 0.7.0
-- Complete pre-OTA backup now saves both OpenBeken configuration (`.dmp`) and LittleFS filesystem (`.fs.tar`)
-- LittleFS TAR includes `autoexec.bat` and other filesystem files
-- New Backups page groups downloads by device and timestamp
-- Keeps the two newest backup sets per device automatically
-- Configuration and filesystem backup failures are reported independently
+- Complete pre-OTA backup saves configuration (`.dmp`) and LittleFS filesystem (`.fs.tar`)
+- New Backups page and two-backup retention per device
 
 ### 0.6.9
-- BL602/BL616 OTA streams the cached local firmware file directly to OpenBeken `POST /api/ota`
-- Avoids loopback HTTP downloads through the add-on Web UI that could produce an empty/short firmware body
-- Validates `BL60X_OTA`, sent byte count and OpenBeken-confirmed written byte count before reboot
-- Adds OTA source/file/size diagnostics
+- Fixed BL602/BL616 native OTA using the cached firmware bytes directly
 
 ### 0.6.7
-- Device heading uses `Device ID - Full Name`
-- Full Name and Short Name are separate editable native OpenBeken values
-- Multi-channel devices have a dedicated channel list
-- Channel labels use OpenBeken zero-based `SetChannelLabel` indexes
-- Fixed desktop action-column stair-step caused by flex table cells
+- Improved device names/channels editor and fixed desktop actions-column CSS
 
 ### 0.6.6
-- Wi-Fi percentage normalized to 0-100%
-- Runtime values such as `0T04:13:55` normalized for display
-- Native device-name discovery groundwork
+- Wi-Fi and runtime normalization
 
 ### 0.6.5
-- Corrected ON/OFF state handling using OpenBeken `Status 0` POWER/POWERx
-- Added native BL602/BL616 Web App OTA through `POST /api/ota`
+- Corrected POWER/POWERx state handling and added native BL602/BL616 OTA
 
 ### 0.6.4
 - Improved native OpenBeken MQTT discovery and Tasmota filtering
@@ -149,28 +129,25 @@ See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete rele
 - Expanded native MQTT discovery and pt-BR translations
 
 ### 0.6.2
-- Expanded native OpenBeken MQTT detection and footer version display
+- Expanded MQTT detection and footer version display
 
 ### 0.6.1
-- Improved native MQTT discovery and removed redundant SelfUpdate navigation
+- Improved MQTT discovery and removed redundant SelfUpdate navigation
 
 ### 0.5.8
-- Numeric firmware version in OTA headings and multilingual labels
+- Numeric firmware version in OTA headings
 
 ### 0.5.7
-- Pre-OTA configuration backup and LittleFS/autoexec separation
+- Pre-OTA configuration backup
 
 ### 0.5.6
-- Mass/Individual OTA modes, five verification attempts and `.ota` upload support
+- Mass/Individual OTA modes and five verification attempts
 
 ### 0.5.5
-- Full Name and firmware/chipset metadata in update selection/logs
+- Full Name and firmware/chipset metadata in OTA selection
 
 ### 0.5.4
-- Improved state handling, release caching, selected-device summary and branding
-
-### 0.5.1
-- Two-pass Auto Scan, `/obkdevicelist` fallback, OTA flow, icon and checkbox improvements
+- State, release caching, selected-device summary and branding improvements
 
 ## Project status
 
