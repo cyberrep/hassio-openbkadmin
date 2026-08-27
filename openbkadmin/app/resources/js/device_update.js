@@ -64,17 +64,19 @@ async function startNativeWebAppOta(deviceId, otaUrl) {
   });
   let result;
   try { result = await response.json(); } catch (e) { result = {}; }
-  if (!response.ok || result.ERROR) {
+  if (!response.ok || result.ERROR || result.success !== true) {
     throw Error(result.ERROR || `Native OTA failed with HTTP ${response.status}`);
   }
+  if (!Number.isFinite(Number(result.written)) || Number(result.written) !== Number(result.size)) {
+    throw Error(`Native OTA was not fully confirmed (sent ${result.size || 0}, written ${result.written || 0})`);
+  }
+  log(deviceId, `OTA upload confirmed: ${result.written} bytes written; reboot requested`, Level.success);
   return result;
 }
 
 async function startOpenBekenOta(deviceId, otaUrl, platform) {
-  // OpenBeken BL602/BL616 uses the Web App REST upload path POST /api/ota.
-  // ota_http is not the supported updater for these targets.
   if (platform === "BL602" || platform === "BL616") {
-    log(deviceId, `Native Web App OTA (/api/ota) - ${platform}`);
+    log(deviceId, `Native Web App OTA (/api/ota raw body) - ${platform}`);
     return startNativeWebAppOta(deviceId, otaUrl);
   }
   return startCommandOta(deviceId, otaUrl);
@@ -96,12 +98,8 @@ async function checkStatus(deviceId, tries = defaultTries) {
 }
 
 function deviceSelector(deviceId) { return `device${deviceId}`; }
-function logGlobal(message, level = Level.info) {
-  const l = document.createElement("span"); l.classList.add(level); l.append(message); document.getElementById("logGlobal").appendChild(l);
-}
-function log(deviceId, message, level = Level.info) {
-  const l = document.createElement("span"); l.classList.add(level); l.append(`[${new Date().toISOString()}] ${message}`); document.getElementById(deviceSelector(deviceId)).appendChild(l);
-}
+function logGlobal(message, level = Level.info) { const l = document.createElement("span"); l.classList.add(level); l.append(message); document.getElementById("logGlobal").appendChild(l); }
+function log(deviceId, message, level = Level.info) { const l = document.createElement("span"); l.classList.add(level); l.append(`[${new Date().toISOString()}] ${message}`); document.getElementById(deviceSelector(deviceId)).appendChild(l); }
 function createDeviceElement(device) {
   const c = document.createElement("div"); c.setAttribute("id", deviceSelector(device.id)); c.classList.add("device");
   const t = document.createElement("h1"); let meta = `${$.i18n("DEVICE")} ${device.id} (${device.name})`;
@@ -120,16 +118,10 @@ async function updateDevice(device) {
     const { targetVersion } = updateTarget;
     const beforeVersion = response.StatusFWR.Version;
     log(device.id, $.i18n("BLOCK_UPDATE_CURRENT_VERSION_IS", beforeVersion));
-    if (targetVersion && !config.force_upgrade && versionsEqual(targetVersion, beforeVersion)) {
-      log(device.id, $.i18n("BLOCK_UPDATE_DEVICE_AT_TARGET_VERSION"), Level.success); return true;
-    }
-    if (targetVersion && config.update_newer_only && !versionUpgrade(targetVersion, beforeVersion)) {
-      log(device.id, $.i18n("BLOCK_UPDATE_DEVICE_NEWER_THAN_TARGET_VERSION"), Level.success); return true;
-    }
+    if (targetVersion && !config.force_upgrade && versionsEqual(targetVersion, beforeVersion)) { log(device.id, $.i18n("BLOCK_UPDATE_DEVICE_AT_TARGET_VERSION"), Level.success); return true; }
+    if (targetVersion && config.update_newer_only && !versionUpgrade(targetVersion, beforeVersion)) { log(device.id, $.i18n("BLOCK_UPDATE_DEVICE_NEWER_THAN_TARGET_VERSION"), Level.success); return true; }
     const upgradePlan = determineUpgradePlan(updateTarget, response);
-    if (upgradePlan.type === "blocked") {
-      log(device.id, $.i18n(upgradePlan.key, ...upgradePlan.values), Level.error); return false;
-    }
+    if (upgradePlan.type === "blocked") { log(device.id, $.i18n(upgradePlan.key, ...upgradePlan.values), Level.error); return false; }
     const step = upgradePlan.steps[upgradePlan.steps.length - 1];
     if (!step || !step.otaUrl) throw Error("No compatible OpenBeken OTA firmware URL was resolved for this device.");
     if (step.targetVersion) log(device.id, $.i18n("BLOCK_UPDATE_ATTEMPT_TO_VERSION", step.targetVersion));
@@ -144,13 +136,9 @@ async function updateDevice(device) {
       try {
         response = await doAjax(device.id, "Status 0", { maxRetries: 0, sleepDuration: 0 });
         log(device.id, $.i18n("BLOCK_UPDATE_CHECKING_VERSION"));
-        if (shouldTreatStatusAsSuccessful({ targetVersion: step.targetVersion, beforeVersion, currentVersion: response.StatusFWR.Version })) {
-          upgradeSuccessful = true; break;
-        }
+        if (shouldTreatStatusAsSuccessful({ targetVersion: step.targetVersion, beforeVersion, currentVersion: response.StatusFWR.Version })) { upgradeSuccessful = true; break; }
         log(device.id, $.i18n(step.targetVersion ? "BLOCK_UPDATE_VERSION_NOT_AT_TARGET_VERSION" : "BLOCK_UPDATE_VERSION_NOT_CHANGED"));
-      } catch (e) {
-        log(device.id, $.i18n("BLOCK_UPDATE_FETCH_FAILED", defaultTries - i - 1, defaultSleepDuration / 1000));
-      }
+      } catch (e) { log(device.id, $.i18n("BLOCK_UPDATE_FETCH_FAILED", defaultTries - i - 1, defaultSleepDuration / 1000)); }
       if (i < defaultTries - 1) { log(device.id, $.i18n("BLOCK_UPDATE_SLEEPING", defaultSleepDuration / 1000)); await sleep(defaultSleepDuration); }
     }
     if (!upgradeSuccessful) {
@@ -160,9 +148,7 @@ async function updateDevice(device) {
     }
     log(device.id, $.i18n("BLOCK_UPDATE_VERSION_IS", response.StatusFWR.Version));
     log(device.id, $.i18n("BLOCK_UPDATE_FINISH_SUCCESS"), Level.success); return true;
-  } catch (e) {
-    log(device.id, e.message, Level.error); return false;
-  }
+  } catch (e) { log(device.id, e.message, Level.error); return false; }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -173,11 +159,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   const mode = (typeof updateMode !== "undefined" ? updateMode : "mass");
   let results = [];
-  if (mode === "individual") {
-    for (const device of devices) results.push(await updateDevice(device));
-  } else {
-    results = await Promise.all(devices.map((device) => updateDevice(device)));
-  }
+  if (mode === "individual") { for (const device of devices) results.push(await updateDevice(device)); }
+  else { results = await Promise.all(devices.map((device) => updateDevice(device))); }
   const successful = results.reduce((count, value) => (value ? count + 1 : count), 0);
   logGlobal($.i18n("BLOCK_UPDATE_RESULTS", successful, devices.length), successful === devices.length ? Level.success : Level.error);
 });
