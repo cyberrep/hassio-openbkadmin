@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.6.5**
+> Current add-on version: **0.6.7**
 
 ## Features
 
@@ -27,10 +27,18 @@ OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monit
 ### OpenBeken device information
 OpenBKAdmin displays IP address, Full Name, chipset, firmware version, Wi-Fi/RSSI, runtime, channel/output names, device state and supported telemetry. Firmware strings such as `OpenBK7231N_1.18.302` are separated into chipset **BK7231N** and version **1.18.302**.
 
-### Device state
-Version 0.6.5 aligns state handling with the upstream OpenBeken implementation. OpenBKAdmin reads `POWER` / `POWERx` from `Status 0`; OpenBeken itself generates these values from `CHANNEL_Get()` for relay/toggle channels. Multi-output rows therefore use `POWER1`, `POWER2`, etc., while single-output devices use `POWER`.
+### Device names
+Version 0.6.7 separates OpenBeken naming concepts in the device editor:
+- **Full Name** is the physical device display name and is read/written with OpenBeken `FriendlyName`.
+- **Short Name** is the short/MQTT device name and is read/written with OpenBeken `ShortName`.
+- **Channel Name** is the individual output label and is written with OpenBeken `SetChannelLabel`.
 
-The previous experimental `Ch` read was removed because upstream defines `ChN value` as a channel **SET** command, not a read-all command. The list keeps a switch for every configured row: blue/checked represents ON, gray represents OFF, and the existing red/error presentation represents a device that could not be contacted.
+The editor heading uses `Device ID - Full Name`. Multi-channel devices have a dedicated Channels section rather than mixing physical-device identity with channel names.
+
+### Device state
+OpenBKAdmin reads `POWER` / `POWERx` from `Status 0`; OpenBeken itself generates these values from `CHANNEL_Get()` for relay/toggle channels. Multi-output rows use `POWER1`, `POWER2`, etc., while single-output devices use `POWER`.
+
+The list keeps a switch for every configured row: blue/checked represents ON, gray represents OFF, and the existing red/error presentation represents a device that could not be contacted.
 
 ### Multi-channel devices
 Multi-channel devices are represented as individual controllable outputs while sharing one physical device/IP. Physical status is requested once and each logical row resolves its matching POWER index.
@@ -62,7 +70,7 @@ OpenBKAdmin firmware management includes:
 - Automatic pre-OTA configuration backup
 - **BL602 / BL616 native Web App OTA** through OpenBeken `POST /api/ota`
 
-For BL602/BL616, OpenBKAdmin downloads the selected OTA image server-side and streams it to the device's native `/api/ota` endpoint. This matches the Web App update path and avoids browser CORS restrictions. Other supported platforms continue using the existing `ota_http` flow.
+For BL602/BL616, OpenBKAdmin downloads the selected OTA image server-side and streams it to the device's native `/api/ota` endpoint. Other supported platforms continue using the existing `ota_http` flow.
 
 Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/releases
 
@@ -72,13 +80,6 @@ The repository includes Home Assistant add-on packaging, NGINX + PHP-FPM runtime
 ### Multilingual interface
 OpenBKAdmin retains the multilingual architecture. Brazilian Portuguese (pt-BR) is the reviewed Portuguese translation baseline.
 
-## Help links
-
-- Documentation: https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/README.md
-- Commands: https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/commands.md
-- Templates / Devices List: https://openbekeniot.github.io/webapp/devicesList.html
-- FAQ: https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/faq.md
-
 ## Installation in Home Assistant
 
 Add this repository to the Home Assistant Add-on Store:
@@ -87,48 +88,35 @@ Add this repository to the Home Assistant Add-on Store:
 
 Then open **Settings → Add-ons → Add-on Store → Repositories**, add the repository, refresh the store, select **OpenBKAdmin**, install it and start the add-on. Publishing a newer version in `openbkadmin/config.yaml` makes Home Assistant offer the normal update workflow while persistent add-on data is preserved.
 
-## Repository structure
-
-```text
-hassio-openbkadmin/
-├── repository.yaml
-├── README.md
-└── openbkadmin/
-    ├── config.yaml
-    ├── Dockerfile
-    ├── build.yaml
-    ├── icon.png
-    ├── logo.png
-    ├── CHANGELOG.md
-    ├── app/
-    └── rootfs/
-```
-
 ## Changelog
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
 
+### 0.6.7
+- Device heading uses `Device ID - Full Name`
+- Full Name and Short Name are separate editable native OpenBeken values
+- Multi-channel devices have a dedicated channel list
+- Channel labels use OpenBeken zero-based `SetChannelLabel` indexes
+- Fixed desktop action-column stair-step caused by flex table cells
+- Footer version synchronized to 0.6.7
+
+### 0.6.6
+- Wi-Fi percentage normalized to 0-100%
+- Runtime values such as `0T04:13:55` normalized for display
+- Native device-name discovery groundwork
+
 ### 0.6.5
-- Corrected ON/OFF state handling using OpenBeken's upstream `Status 0` POWER/POWERx generation
-- Removed invalid `Ch` read-all behavior
-- Kept switches for every row with normal ON/OFF/offline visual states
+- Corrected ON/OFF state handling using OpenBeken `Status 0` POWER/POWERx
 - Added native BL602/BL616 Web App OTA through `POST /api/ota`
-- Added server-side OTA proxy so the browser does not depend on device CORS
-- Retained pre-OTA backup, Mass/Individual modes and five post-update checks
 
 ### 0.6.4
-- Improved native OpenBeken MQTT discovery based on per-device base topics
-- Discovery no longer requires the Tasmota TELE compatibility flag
-- Tasmota STATUS replies filtered so real Tasmota devices are not imported
-- Clarified `MqttGroup` as a command group rather than per-device identity
+- Improved native OpenBeken MQTT discovery and Tasmota filtering
 
 ### 0.6.3
-- Expanded native MQTT discovery to documented OpenBeken telemetry topics
-- Localized additional firmware-update and backup messages in pt-BR
+- Expanded native MQTT discovery and pt-BR translations
 
 ### 0.6.2
-- Expanded native OpenBeken MQTT detection and `<device>/ip/get`
-- Footer shows the running OpenBKAdmin version
+- Expanded native OpenBeken MQTT detection and footer version display
 
 ### 0.6.1
 - Improved native MQTT discovery and removed redundant SelfUpdate navigation
