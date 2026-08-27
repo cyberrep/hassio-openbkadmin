@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.7.1**
+> Current add-on version: **0.7.3**
 
 ## Features
 
@@ -64,6 +64,7 @@ Discovery does **not** require the Tasmota TELE compatibility flag. Tasmota TELE
 ### Firmware updates
 OpenBKAdmin firmware management includes:
 - Manual firmware upload and official OpenBeken GitHub release retrieval
+- Selection from recent official OpenBeken releases
 - Automatic chipset detection and chipset-aware firmware selection
 - Numeric installed/target firmware comparison and downgrade protection
 - Mixed-chipset selections
@@ -95,6 +96,16 @@ Then open **Settings → Add-ons → Add-on Store → Repositories**, add the re
 ## Changelog
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
+
+### 0.7.3
+- Fixed the fatal error after choosing an official OpenBeken release
+- Official-release selection now proceeds normally to device selection
+- Release metadata updated so Home Assistant detects this correction as a new add-on update
+
+### 0.7.2
+- Added recent official OpenBeken release selection to the OTA screen
+- Chipset continues to be detected and verified automatically for each selected physical device
+- Improved OTA update workflow and backup integration
 
 ### 0.7.1
 - Backups navigation and Backups page are translated for every supported UI language
