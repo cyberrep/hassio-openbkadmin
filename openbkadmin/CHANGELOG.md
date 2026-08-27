@@ -1,5 +1,33 @@
 # OpenBKAdmin Changelog
 
+## [0.6.7] - 2026-08-26
+
+### Device editor
+- Device heading now shows `Device ID - Full Name` with a stored-name fallback when the live native name is unavailable.
+- Full Name and Short Name are separate editable OpenBeken fields.
+- Saving Full Name uses OpenBeken `FriendlyName`; saving Short Name uses `ShortName`.
+- Multi-channel devices now have a dedicated Channels section instead of mixing the device name with channel names.
+- Channel labels use OpenBeken `SetChannelLabel` with zero-based channel indexes, matching the upstream implementation.
+- Channel values are kept separate from the physical device Full Name and Short Name.
+
+### Interface
+- Fixed the desktop actions-column stair-step caused by applying `display:flex` directly to table cells.
+- Footer version updated to 0.6.7.
+
+### Release metadata
+- README, add-on metadata and changelog are synchronized at 0.6.7.
+
+## [0.6.6] - 2026-08-26
+
+### Device information
+- Wi-Fi percentage is normalized and clamped to 0-100%, including OpenBeken targets that report RSSI as dBm.
+- Runtime values such as `0T04:13:55` are normalized to the normal OpenBKAdmin duration format.
+- Runtime falls back to OpenBeken uptime when a valid startup timestamp is not available.
+
+### Device names
+- Added native OpenBeken name discovery groundwork for Full Name, Short Name and channel labels.
+- Prepared the device editor for clearer separation of physical-device identity and channel names.
+
 ## [0.6.5] - 2026-08-26
 
 ### Device state

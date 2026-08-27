@@ -27,6 +27,21 @@
   margin: 0;
 }
 
+/* Keep the actions column as a real table cell on desktop. Using flex directly
+   on TD changes table layout calculations and creates the visible stair-step
+   right edge. The links themselves remain inline-flex. */
+@media (min-width: 768px) {
+  .devices-page #device-list td.actions,
+  .devices-page #device-list.short-list td.actions {
+    display: table-cell !important;
+    width: 1% !important;
+    min-width: 0 !important;
+    text-align: right;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+}
+
 .navbar-brand.logo img {
   width: 50px;
   height: 50px;
