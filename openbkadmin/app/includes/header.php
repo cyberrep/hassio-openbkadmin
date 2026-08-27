@@ -3,7 +3,7 @@
 use OpenBKAdmin\Helper\SupportedLanguageHelper;
 use OpenBKAdmin\Helper\UrlHelper;
 use OpenBKAdmin\Helper\ViewHelper;
-require_once _LANGDIR_.'backup_translations.php';
+require_once dirname(__DIR__).'/lang/backup_translations.php';
 $urlHelper=$container->get(UrlHelper::class);$viewHelper=$container->get(ViewHelper::class);ob_start();?>
 <div class="theme-toggle-group" aria-label="Theme toggle"><span class="theme-toggle-side theme-toggle-side-sun" aria-hidden="true"><i class="fas fa-sun"></i></span><button type="button" class="theme-toggle navbar-theme-toggle js-theme-toggle" aria-label="Toggle day and night mode" aria-pressed="false" title="Toggle day and night mode"><span class="theme-toggle-track" aria-hidden="true"><span class="theme-toggle-thumb"></span></span></button><span class="theme-toggle-side theme-toggle-side-moon" aria-hidden="true"><i class="fas fa-moon"></i></span></div>
 <?php $themeToggleMarkup=ob_get_clean(); ?>
