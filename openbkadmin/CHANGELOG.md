@@ -1,5 +1,19 @@
 # OpenBKAdmin Changelog
 
+## [0.6.9] - 2026-08-27
+
+### BL602 / BL616 Web App OTA
+- Fixed the BL602/BL616 native OTA transport after reproducing the `Firmware file is too small or invalid` failure.
+- OpenBKAdmin now reads firmware already downloaded by `FirmwareDownloader` directly from persistent `/data/firmwares/` instead of making an HTTP request back to its own public add-on URL.
+- This mirrors the OpenBeken Web App behavior: the actual `OpenBL602_*_OTA.bin.xz.ota` bytes are sent as the raw body of `POST /api/ota`.
+- Keeps the official `BL60X_OTA` header validation before contacting the device.
+- Keeps `Expect: 100-Continue` disabled and sends an explicit `Content-Length` for the embedded OpenBeken HTTP server.
+- Requires the device JSON response to confirm exactly the same number of bytes written before reboot is requested.
+- OTA diagnostics now report whether firmware came from the local cache or remote fallback, filename, sent size and confirmed written size.
+
+### Release metadata
+- Add-on metadata, footer, README and changelog synchronized to 0.6.9.
+
 ## [0.6.7] - 2026-08-27
 
 ### BL602 / BL616 OTA hotfix
