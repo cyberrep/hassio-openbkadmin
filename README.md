@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.7.0**
+> Current add-on version: **0.7.1**
 
 ## Features
 
@@ -82,7 +82,7 @@ Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/rel
 The repository includes Home Assistant add-on packaging, NGINX + PHP-FPM runtime, direct Web UI access, persistent configuration/device data, repository metadata and OpenBKAdmin branding assets.
 
 ### Multilingual interface
-OpenBKAdmin retains the multilingual architecture. Brazilian Portuguese (pt-BR) is the reviewed Portuguese translation baseline.
+OpenBKAdmin retains the multilingual architecture. New OpenBKAdmin features must provide translations for every supported interface language. Brazilian Portuguese (pt-BR) remains the reviewed Portuguese translation baseline.
 
 ## Installation in Home Assistant
 
@@ -95,6 +95,12 @@ Then open **Settings → Add-ons → Add-on Store → Repositories**, add the re
 ## Changelog
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
+
+### 0.7.1
+- Backups navigation and Backups page are translated for every supported UI language
+- New pre-OTA backup messages, errors, labels and status text are translated
+- Centralized translations added for cs, de, en, es, fr, he, hu, it, nl, pl, pt-BR, ru and zh-TW
+- New project rule: new user-facing features must include all supported languages
 
 ### 0.7.0
 - Complete pre-OTA backup now saves both OpenBeken configuration (`.dmp`) and LittleFS filesystem (`.fs.tar`)
