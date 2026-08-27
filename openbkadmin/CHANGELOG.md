@@ -1,5 +1,26 @@
 # OpenBKAdmin Changelog
 
+## [0.7.3] - 2026-08-27
+
+### Official release OTA hotfix
+- Fixed the fatal `Undefined constant __L::DEVICE_UPDATE_OFFICIAL_RELEASE_SELECTED` error after selecting an official OpenBeken firmware release.
+- Official-release selection now carries the chosen version into the device-selection/update workflow without depending on the missing translation constant.
+- Published as a new add-on version so Home Assistant can detect and install the correction normally.
+
+### Release metadata
+- Add-on metadata and README synchronized to 0.7.3.
+
+## [0.7.2] - 2026-08-27
+
+### Official OpenBeken releases
+- Added selection of recent official OpenBeken firmware releases on the OTA page.
+- Removed the obsolete chipset input from the official-release section.
+- Chipset is detected and verified automatically for every selected physical device before OTA; mixed-chipset selections remain supported.
+- OpenBKAdmin selects/downloads the appropriate OTA asset for each detected chipset.
+
+### Backup integration
+- Continued integration of configuration and LittleFS pre-OTA backups with the firmware update workflow.
+
 ## [0.7.1] - 2026-08-27
 
 ### Complete multilingual pass for new backup features
