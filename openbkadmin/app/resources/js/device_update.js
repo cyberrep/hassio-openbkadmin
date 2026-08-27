@@ -14,7 +14,7 @@ const Level = { info: "info", error: "error", success: "success" };
 const updateTargets = JSON.parse(document.getElementById("update_targets").value || "{}");
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const defaultTries = 5;
-const defaultSleepDuration = 10000;
+const defaultSleepDuration = 30000;
 const initialOtaWait = 30000;
 const defaultRetryOptions = { maxRetries: defaultTries, sleepDuration: defaultSleepDuration };
 
