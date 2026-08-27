@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.6.7**
+> Current add-on version: **0.6.9**
 
 ## Features
 
@@ -28,7 +28,7 @@ OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monit
 OpenBKAdmin displays IP address, Full Name, chipset, firmware version, Wi-Fi/RSSI, runtime, channel/output names, device state and supported telemetry. Firmware strings such as `OpenBK7231N_1.18.302` are separated into chipset **BK7231N** and version **1.18.302**.
 
 ### Device names
-Version 0.6.7 separates OpenBeken naming concepts in the device editor:
+OpenBKAdmin separates OpenBeken naming concepts in the device editor:
 - **Full Name** is the physical device display name and is read/written with OpenBeken `FriendlyName`.
 - **Short Name** is the short/MQTT device name and is read/written with OpenBeken `ShortName`.
 - **Channel Name** is the individual output label and is written with OpenBeken `SetChannelLabel`.
@@ -70,7 +70,7 @@ OpenBKAdmin firmware management includes:
 - Automatic pre-OTA configuration backup
 - **BL602 / BL616 native Web App OTA** through OpenBeken `POST /api/ota`
 
-For BL602/BL616, OpenBKAdmin downloads the selected OTA image server-side and streams it to the device's native `/api/ota` endpoint. Other supported platforms continue using the existing `ota_http` flow.
+For BL602/BL616, OpenBKAdmin sends the actual official `OpenBL602_*_OTA.bin.xz.ota` bytes as the raw request body to the device's native `/api/ota` endpoint, matching OpenBeken's Web App/REST implementation. Version 0.6.9 prefers the firmware already downloaded into `/data/firmwares/`, avoiding a loopback HTTP request to the add-on itself. The BL60X OTA header and byte count returned by the device are validated before reboot. Other supported platforms continue using the existing `ota_http` flow.
 
 Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/releases
 
@@ -92,13 +92,19 @@ Then open **Settings → Add-ons → Add-on Store → Repositories**, add the re
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
 
+### 0.6.9
+- BL602/BL616 OTA now streams the cached local firmware file directly to OpenBeken `POST /api/ota`
+- Avoids loopback HTTP downloads through the add-on Web UI that could produce an empty/short firmware body
+- Validates `BL60X_OTA`, sent byte count and OpenBeken-confirmed written byte count before reboot
+- Adds OTA source/file/size diagnostics
+- Footer and release metadata synchronized to 0.6.9
+
 ### 0.6.7
 - Device heading uses `Device ID - Full Name`
 - Full Name and Short Name are separate editable native OpenBeken values
 - Multi-channel devices have a dedicated channel list
 - Channel labels use OpenBeken zero-based `SetChannelLabel` indexes
 - Fixed desktop action-column stair-step caused by flex table cells
-- Footer version synchronized to 0.6.7
 
 ### 0.6.6
 - Wi-Fi percentage normalized to 0-100%
