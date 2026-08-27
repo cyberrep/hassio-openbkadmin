@@ -40,9 +40,12 @@ if (isset($_GET['doAjaxAll'])) {
     exit;
 }
 
-// Native OpenBeken Web App OTA proxy. BL602/BL616 consume the OTA file as the
-// raw HTTP request body at POST /api/ota (not multipart/form-data). The proxy
-// is required because the browser cannot reliably POST directly to LAN devices.
+// Native OpenBeken Web App OTA proxy for BL602/BL616.
+// The OpenBeken REST implementation consumes the complete .ota image as the
+// raw request body of POST /api/ota. Firmware already downloaded by
+// OpenBKAdmin is read directly from /data/firmwares instead of making an HTTP
+// request back to the add-on itself. This also matches what the browser Web App
+// does: the actual OTA bytes, not the URL, are posted to the device.
 if (isset($_GET['nativeOta'])) {
     session_write_close();
     header('Content-Type: application/json');
@@ -66,26 +69,48 @@ if (isset($_GET['nativeOta'])) {
 
     $client = new Client(['timeout' => 180, 'connect_timeout' => 10, 'http_errors' => true]);
     $tmp = null;
+    $firmwareSource = 'remote';
 
     try {
-        $tmp = fopen('php://temp/maxmemory:5242880', 'w+b');
-        if (false === $tmp) throw new RuntimeException('Could not create temporary OTA stream');
+        // Automatic OTA firmware is already stored here by FirmwareDownloader.
+        // Prefer the local copy. Calling the add-on's public URL from inside its
+        // own container can return an empty/short response depending on ingress,
+        // authentication and host routing, which caused the previous <512-byte
+        // "Firmware file is too small or invalid" failure.
+        $urlPath = (string) parse_url($firmwareUrl, PHP_URL_PATH);
+        $firmwareName = basename(rawurldecode($urlPath));
+        $localFirmware = _DATADIR_.'firmwares/'.$firmwareName;
 
-        $downloadResponse = $client->request('GET', $firmwareUrl, ['sink' => $tmp]);
-        if ($downloadResponse->getStatusCode() < 200 || $downloadResponse->getStatusCode() >= 300) {
-            throw new RuntimeException('Firmware download failed with HTTP '.$downloadResponse->getStatusCode());
+        if ('' !== $firmwareName && is_file($localFirmware) && is_readable($localFirmware)) {
+            $size = filesize($localFirmware);
+            if (false === $size || $size < 512) {
+                throw new RuntimeException('Local firmware file is too small or invalid: '.$firmwareName);
+            }
+            $tmp = fopen($localFirmware, 'rb');
+            if (false === $tmp) throw new RuntimeException('Could not open local OTA firmware');
+            $firmwareSource = 'local';
+        } else {
+            $tmp = fopen('php://temp/maxmemory:5242880', 'w+b');
+            if (false === $tmp) throw new RuntimeException('Could not create temporary OTA stream');
+
+            $downloadResponse = $client->request('GET', $firmwareUrl, [
+                'sink' => $tmp,
+                'allow_redirects' => true,
+            ]);
+            if ($downloadResponse->getStatusCode() < 200 || $downloadResponse->getStatusCode() >= 300) {
+                throw new RuntimeException('Firmware download failed with HTTP '.$downloadResponse->getStatusCode());
+            }
+            $stats = fstat($tmp);
+            $size = (int) ($stats['size'] ?? 0);
+            if ($size < 512) throw new RuntimeException('Downloaded firmware file is too small or invalid ('.$size.' bytes)');
+            rewind($tmp);
         }
 
-        $size = ftell($tmp);
-        if (false === $size || $size < 512) throw new RuntimeException('Firmware file is too small or invalid');
-        rewind($tmp);
-
-        // BL602 OTA files have a 512-byte header whose identifier starts with
-        // BL60X_OTA. Rejecting a wrong image here prevents erasing the backup
-        // partition only to have OpenBeken reject the header afterwards.
+        // BL602/BL616 OpenBeken OTA starts with a 512-byte Bouffalo OTA header.
         $header = fread($tmp, 16);
         if (false === $header || 0 !== strncmp($header, 'BL60X_OTA', 9)) {
-            throw new RuntimeException('Invalid BL602 OTA header: expected BL60X_OTA');
+            $hex = false === $header ? '' : strtoupper(bin2hex(substr($header, 0, 12)));
+            throw new RuntimeException('Invalid BL602 OTA header: expected BL60X_OTA'.($hex !== '' ? ' (got '.$hex.')' : ''));
         }
         rewind($tmp);
 
@@ -94,9 +119,6 @@ if (isset($_GET['nativeOta'])) {
             'headers' => [
                 'Content-Type' => 'application/octet-stream',
                 'Content-Length' => (string) $size,
-                // Guzzle may otherwise use Expect: 100-Continue for a large
-                // body. OpenBeken's small embedded HTTP server expects the raw
-                // body immediately and does not need that handshake.
                 'Expect' => '',
                 'Connection' => 'close',
             ],
@@ -121,9 +143,8 @@ if (isset($_GET['nativeOta'])) {
 
         if (is_resource($tmp)) { fclose($tmp); $tmp = null; }
 
-        // BL602's OTA writer updates the boot partition table but does not call
-        // the reboot routine itself. The official REST API exposes /api/reboot,
-        // so reboot only after /api/ota has confirmed the complete image.
+        // The BL602 writer updates the boot partition table after validating the
+        // SHA256. Request reboot only after the device confirms the full image.
         $rebootRequested = false;
         try {
             $rebootOptions = [
@@ -138,9 +159,7 @@ if (isset($_GET['nativeOta'])) {
             $client->request('POST', $baseDeviceUrl.'/api/reboot', $rebootOptions);
             $rebootRequested = true;
         } catch (Throwable $ignored) {
-            // A connection drop is normal if the device reboots before sending
-            // the complete HTTP response. At this point OTA was already fully
-            // validated, so let the version polling determine final success.
+            // Connection loss is expected if reboot begins immediately.
             $rebootRequested = true;
         }
 
@@ -148,6 +167,8 @@ if (isset($_GET['nativeOta'])) {
             'success' => true,
             'status' => $response->getStatusCode(),
             'device' => $deviceId,
+            'source' => $firmwareSource,
+            'file' => $firmwareName,
             'size' => $size,
             'written' => $written,
             'rebootRequested' => $rebootRequested,
@@ -156,7 +177,7 @@ if (isset($_GET['nativeOta'])) {
     } catch (GuzzleException|RuntimeException $exception) {
         if (is_resource($tmp)) fclose($tmp);
         http_response_code(502);
-        echo json_encode(['ERROR' => $exception->getMessage()]);
+        echo json_encode(['ERROR' => $exception->getMessage(), 'source' => $firmwareSource]);
     }
     exit;
 }
