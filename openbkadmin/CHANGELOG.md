@@ -1,5 +1,17 @@
 # OpenBKAdmin Changelog
 
+## [0.7.1] - 2026-08-27
+
+### Complete multilingual pass for new backup features
+- Removed hard-coded Portuguese/English text introduced by the 0.7.0 backup workflow.
+- Backups navigation, page title, description, table headings, download labels, delete confirmations, empty state and legacy-backup labels now follow the selected UI language.
+- Pre-OTA backup summary, selected-device labels, execution mode, backup errors, chipset/firmware errors and safety-stop messages now follow the selected UI language.
+- Added translations for every currently supported OpenBKAdmin UI language: Czech, German, English, Spanish, French, Hebrew, Hungarian, Italian, Dutch, Polish, Brazilian Portuguese, Russian and Traditional Chinese.
+- Added a project rule in README: new user-facing OpenBKAdmin features must ship with translations for every supported UI language.
+
+### Release metadata
+- Add-on metadata, footer, README and changelog synchronized to 0.7.1.
+
 ## [0.7.0] - 2026-08-27
 
 ### Complete pre-OTA backups
