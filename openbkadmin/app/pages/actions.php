@@ -40,9 +40,9 @@ if (isset($_GET['doAjaxAll'])) {
     exit;
 }
 
-// BL602/BL616 and other OpenBeken platforms expose the native Web App OTA
-// endpoint as POST /api/ota. The browser cannot reliably POST firmware to a
-// LAN device because of CORS, so OpenBKAdmin proxies the firmware server-side.
+// Native OpenBeken Web App OTA proxy. BL602/BL616 consume the OTA file as the
+// raw HTTP request body at POST /api/ota (not multipart/form-data). The proxy
+// is required because the browser cannot reliably POST directly to LAN devices.
 if (isset($_GET['nativeOta'])) {
     session_write_close();
     header('Content-Type: application/json');
@@ -64,55 +64,97 @@ if (isset($_GET['nativeOta'])) {
         exit;
     }
 
-    $client = new Client([
-        'timeout' => 120,
-        'connect_timeout' => 10,
-        'http_errors' => true,
-    ]);
+    $client = new Client(['timeout' => 180, 'connect_timeout' => 10, 'http_errors' => true]);
+    $tmp = null;
 
     try {
-        // Download into a temporary stream so large OTA images are not copied
-        // into PHP strings more than necessary.
         $tmp = fopen('php://temp/maxmemory:5242880', 'w+b');
-        $client->request('GET', $firmwareUrl, ['sink' => $tmp]);
+        if (false === $tmp) throw new RuntimeException('Could not create temporary OTA stream');
+
+        $downloadResponse = $client->request('GET', $firmwareUrl, ['sink' => $tmp]);
+        if ($downloadResponse->getStatusCode() < 200 || $downloadResponse->getStatusCode() >= 300) {
+            throw new RuntimeException('Firmware download failed with HTTP '.$downloadResponse->getStatusCode());
+        }
+
         $size = ftell($tmp);
+        if (false === $size || $size < 512) throw new RuntimeException('Firmware file is too small or invalid');
         rewind($tmp);
 
-        if ($size < 512) {
-            throw new RuntimeException('Firmware file is too small or invalid');
+        // BL602 OTA files have a 512-byte header whose identifier starts with
+        // BL60X_OTA. Rejecting a wrong image here prevents erasing the backup
+        // partition only to have OpenBeken reject the header afterwards.
+        $header = fread($tmp, 16);
+        if (false === $header || 0 !== strncmp($header, 'BL60X_OTA', 9)) {
+            throw new RuntimeException('Invalid BL602 OTA header: expected BL60X_OTA');
         }
+        rewind($tmp);
 
         $options = [
             'body' => $tmp,
             'headers' => [
                 'Content-Type' => 'application/octet-stream',
                 'Content-Length' => (string) $size,
+                // Guzzle may otherwise use Expect: 100-Continue for a large
+                // body. OpenBeken's small embedded HTTP server expects the raw
+                // body immediately and does not need that handshake.
+                'Expect' => '',
+                'Connection' => 'close',
             ],
+            'expect' => false,
             'timeout' => 180,
             'connect_timeout' => 10,
         ];
+        if (!empty($device->password)) $options[RequestOptions::AUTH] = [$device->username, $device->password];
 
-        if (!empty($device->password)) {
-            $options[RequestOptions::AUTH] = [$device->username, $device->password];
+        $baseDeviceUrl = sprintf('http://%s:%s', $device->ip, $device->port);
+        $response = $client->request('POST', $baseDeviceUrl.'/api/ota', $options);
+        $body = trim((string) $response->getBody());
+        $decoded = json_decode($body, true);
+
+        if (!is_array($decoded) || !isset($decoded['size'])) {
+            throw new RuntimeException('OpenBeken OTA did not confirm bytes written. Response: '.substr($body, 0, 250));
+        }
+        $written = (int) $decoded['size'];
+        if ($written !== (int) $size) {
+            throw new RuntimeException(sprintf('OpenBeken OTA size mismatch: sent %d bytes, device confirmed %d bytes', $size, $written));
         }
 
-        $otaEndpoint = sprintf('http://%s:%s/api/ota', $device->ip, $device->port);
-        $response = $client->request('POST', $otaEndpoint, $options);
-        $body = trim((string) $response->getBody());
-        fclose($tmp);
+        if (is_resource($tmp)) { fclose($tmp); $tmp = null; }
 
-        $decoded = json_decode($body, true);
+        // BL602's OTA writer updates the boot partition table but does not call
+        // the reboot routine itself. The official REST API exposes /api/reboot,
+        // so reboot only after /api/ota has confirmed the complete image.
+        $rebootRequested = false;
+        try {
+            $rebootOptions = [
+                'body' => '',
+                'headers' => ['Content-Length' => '0', 'Expect' => '', 'Connection' => 'close'],
+                'expect' => false,
+                'timeout' => 5,
+                'connect_timeout' => 3,
+                'http_errors' => false,
+            ];
+            if (!empty($device->password)) $rebootOptions[RequestOptions::AUTH] = [$device->username, $device->password];
+            $client->request('POST', $baseDeviceUrl.'/api/reboot', $rebootOptions);
+            $rebootRequested = true;
+        } catch (Throwable $ignored) {
+            // A connection drop is normal if the device reboots before sending
+            // the complete HTTP response. At this point OTA was already fully
+            // validated, so let the version polling determine final success.
+            $rebootRequested = true;
+        }
+
         echo json_encode([
             'success' => true,
             'status' => $response->getStatusCode(),
             'device' => $deviceId,
             'size' => $size,
-            'response' => is_array($decoded) ? $decoded : $body,
+            'written' => $written,
+            'rebootRequested' => $rebootRequested,
+            'response' => $decoded,
         ]);
     } catch (GuzzleException|RuntimeException $exception) {
-        if (isset($tmp) && is_resource($tmp)) {
-            fclose($tmp);
-        }
+        if (is_resource($tmp)) fclose($tmp);
         http_response_code(502);
         echo json_encode(['ERROR' => $exception->getMessage()]);
     }
@@ -125,14 +167,9 @@ if (isset($_GET['i18n'])) {
     $language = array_key_exists($requestedLang, $supportedLanguages) ? $requestedLang : $lang;
     $cacheFile = _TMPDIR_.'cache/i18n/json_i18n_'.$language.'.cache.json';
     if (!is_file($cacheFile)) {
-        http_response_code(404);
-        header('Content-Type: application/json');
-        echo json_encode(['error' => 'Language cache not found']);
-        exit;
+        http_response_code(404); header('Content-Type: application/json'); echo json_encode(['error' => 'Language cache not found']); exit;
     }
-    header('Content-Type: application/json');
-    readfile($cacheFile);
-    exit;
+    header('Content-Type: application/json'); readfile($cacheFile); exit;
 }
 
 if (isset($_GET['downloadBackup'])) {
