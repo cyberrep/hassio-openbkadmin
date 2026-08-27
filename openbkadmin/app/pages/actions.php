@@ -1,5 +1,8 @@
 <?php
 
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\RequestOptions;
 use OpenBKAdmin\Backup\BackupHelper;
 use OpenBKAdmin\DevicePasswordKeyProvider;
 use OpenBKAdmin\DeviceRepository;
@@ -32,47 +35,87 @@ if (isset($_GET['doAjax'])) {
 if (isset($_GET['doAjaxAll'])) {
     session_write_close();
     $data = $OpenBeken->doAjaxAll();
-
-    // OpenBeken's native `Ch` command returns all used channels in one JSON
-    // response. Use it once per physical multi-channel device so each logical
-    // row gets its own real ON/OFF state without N requests for N outputs.
-    $done = [];
-    foreach ($OpenBeken->getDevices() as $device) {
-        if (count($device->names) < 2 || isset($done[$device->getAddress()])) continue;
-        $done[$device->getAddress()] = true;
-        if (!isset($data[$device->id]) || !is_object($data[$device->id])) continue;
-
-        $channels = $OpenBeken->doAjax($device->id, 'Ch');
-        if (!is_object($channels) || !empty($channels->ERROR)) continue;
-        if (!isset($data[$device->id]->StatusSTS) || !is_object($data[$device->id]->StatusSTS)) {
-            $data[$device->id]->StatusSTS = new stdClass();
-        }
-
-        foreach (array_keys($device->names) as $key) {
-            $relay = $key + 1;
-            $value = null;
-            foreach (['Channel'.$relay, 'CHANNEL'.$relay, 'CH'.$relay, 'Ch'.$relay, (string) $relay] as $field) {
-                if (isset($channels->{$field}) && is_scalar($channels->{$field}) && is_numeric($channels->{$field})) {
-                    $value = (float) $channels->{$field};
-                    break;
-                }
-            }
-            if ($value === null && isset($channels->Channels) && is_object($channels->Channels)) {
-                foreach (['Channel'.$relay, 'CH'.$relay, (string) $relay] as $field) {
-                    if (isset($channels->Channels->{$field}) && is_scalar($channels->Channels->{$field}) && is_numeric($channels->Channels->{$field})) {
-                        $value = (float) $channels->Channels->{$field};
-                        break;
-                    }
-                }
-            }
-            if ($value === null) continue;
-            $power = 'POWER'.$relay;
-            $data[$device->id]->StatusSTS->{$power} = 0.0 === $value ? 'OFF' : 'ON';
-        }
-    }
-
     header('Content-Type: application/json');
     echo json_encode($data);
+    exit;
+}
+
+// BL602/BL616 and other OpenBeken platforms expose the native Web App OTA
+// endpoint as POST /api/ota. The browser cannot reliably POST firmware to a
+// LAN device because of CORS, so OpenBKAdmin proxies the firmware server-side.
+if (isset($_GET['nativeOta'])) {
+    session_write_close();
+    header('Content-Type: application/json');
+
+    $deviceId = (int) ($_REQUEST['id'] ?? 0);
+    $firmwareUrl = trim((string) ($_REQUEST['url'] ?? ''));
+    $device = $OpenBeken->getDeviceById($deviceId);
+
+    if (null === $device || '' === $firmwareUrl) {
+        http_response_code(400);
+        echo json_encode(['ERROR' => 'Invalid device or firmware URL']);
+        exit;
+    }
+
+    $scheme = strtolower((string) parse_url($firmwareUrl, PHP_URL_SCHEME));
+    if (!in_array($scheme, ['http', 'https'], true)) {
+        http_response_code(400);
+        echo json_encode(['ERROR' => 'Firmware URL must use HTTP or HTTPS']);
+        exit;
+    }
+
+    $client = new Client([
+        'timeout' => 120,
+        'connect_timeout' => 10,
+        'http_errors' => true,
+    ]);
+
+    try {
+        // Download into a temporary stream so large OTA images are not copied
+        // into PHP strings more than necessary.
+        $tmp = fopen('php://temp/maxmemory:5242880', 'w+b');
+        $client->request('GET', $firmwareUrl, ['sink' => $tmp]);
+        $size = ftell($tmp);
+        rewind($tmp);
+
+        if ($size < 512) {
+            throw new RuntimeException('Firmware file is too small or invalid');
+        }
+
+        $options = [
+            'body' => $tmp,
+            'headers' => [
+                'Content-Type' => 'application/octet-stream',
+                'Content-Length' => (string) $size,
+            ],
+            'timeout' => 180,
+            'connect_timeout' => 10,
+        ];
+
+        if (!empty($device->password)) {
+            $options[RequestOptions::AUTH] = [$device->username, $device->password];
+        }
+
+        $otaEndpoint = sprintf('http://%s:%s/api/ota', $device->ip, $device->port);
+        $response = $client->request('POST', $otaEndpoint, $options);
+        $body = trim((string) $response->getBody());
+        fclose($tmp);
+
+        $decoded = json_decode($body, true);
+        echo json_encode([
+            'success' => true,
+            'status' => $response->getStatusCode(),
+            'device' => $deviceId,
+            'size' => $size,
+            'response' => is_array($decoded) ? $decoded : $body,
+        ]);
+    } catch (GuzzleException|RuntimeException $exception) {
+        if (isset($tmp) && is_resource($tmp)) {
+            fclose($tmp);
+        }
+        http_response_code(502);
+        echo json_encode(['ERROR' => $exception->getMessage()]);
+    }
     exit;
 }
 
