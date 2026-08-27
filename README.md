@@ -8,7 +8,7 @@
 
 OpenBKAdmin is a Home Assistant add-on focused on discovering, organizing, monitoring, configuring and managing devices running **OpenBeken** from a single web interface.
 
-> Current add-on version: **0.6.9**
+> Current add-on version: **0.7.0**
 
 ## Features
 
@@ -52,10 +52,14 @@ MQTT-assisted discovery recognizes OpenBeken native per-device topics such as `<
 Discovery does **not** require the Tasmota TELE compatibility flag. Tasmota TELE/STAT remains only as a validated fallback so real Tasmota devices are not imported. `MqttGroup` / Group Topic is treated as a shared command group, not per-device identity.
 
 ### Backup and restore
-- Create/download device backups and restore OpenBeken `.dmp` backups
-- Pre-OTA timestamped configuration dump for every unique selected physical device
-- Backup filename includes OpenBKAdmin device ID/name
-- LittleFS files such as `autoexec.bat` are separate and are not silently restored
+- Create/download device configuration backups and restore OpenBeken `.dmp` backups
+- Automatic pre-OTA timestamped backup for every unique selected physical device
+- **Configuration backup (`.dmp`)** preserves the OpenBeken configuration dump
+- **Filesystem backup (`.fs.tar`)** preserves the complete LittleFS contents, including `autoexec.bat`
+- Uses OpenBeken's native `/api/lfs/` REST filesystem interface
+- Backups page groups Configuration and Filesystem files by device and timestamp
+- Click either file to download it; delete removes the complete backup set
+- Automatically retains the **2 newest backup sets per device**
 
 ### Firmware updates
 OpenBKAdmin firmware management includes:
@@ -67,10 +71,10 @@ OpenBKAdmin firmware management includes:
 - Cached release metadata to reduce GitHub API rate-limit failures
 - **Mass** parallel and **Individual** sequential OTA modes
 - Maximum five post-OTA status checks per device
-- Automatic pre-OTA configuration backup
+- Automatic pre-OTA configuration + LittleFS backup
 - **BL602 / BL616 native Web App OTA** through OpenBeken `POST /api/ota`
 
-For BL602/BL616, OpenBKAdmin sends the actual official `OpenBL602_*_OTA.bin.xz.ota` bytes as the raw request body to the device's native `/api/ota` endpoint, matching OpenBeken's Web App/REST implementation. Version 0.6.9 prefers the firmware already downloaded into `/data/firmwares/`, avoiding a loopback HTTP request to the add-on itself. The BL60X OTA header and byte count returned by the device are validated before reboot. Other supported platforms continue using the existing `ota_http` flow.
+For BL602/BL616, OpenBKAdmin sends the actual official `OpenBL602_*_OTA.bin.xz.ota` bytes as the raw request body to the device's native `/api/ota` endpoint, matching OpenBeken's Web App/REST implementation. The firmware already downloaded into `/data/firmwares/` is used directly, avoiding a loopback HTTP request to the add-on itself. The BL60X OTA header and byte count returned by the device are validated before reboot. Other supported platforms continue using the existing `ota_http` flow.
 
 Official firmware source: https://github.com/openshwprojects/OpenBK7231T_App/releases
 
@@ -92,12 +96,18 @@ Then open **Settings → Add-ons → Add-on Store → Repositories**, add the re
 
 See [`openbkadmin/CHANGELOG.md`](openbkadmin/CHANGELOG.md) for the complete release history.
 
+### 0.7.0
+- Complete pre-OTA backup now saves both OpenBeken configuration (`.dmp`) and LittleFS filesystem (`.fs.tar`)
+- LittleFS TAR includes `autoexec.bat` and other filesystem files
+- New Backups page groups downloads by device and timestamp
+- Keeps the two newest backup sets per device automatically
+- Configuration and filesystem backup failures are reported independently
+
 ### 0.6.9
-- BL602/BL616 OTA now streams the cached local firmware file directly to OpenBeken `POST /api/ota`
+- BL602/BL616 OTA streams the cached local firmware file directly to OpenBeken `POST /api/ota`
 - Avoids loopback HTTP downloads through the add-on Web UI that could produce an empty/short firmware body
 - Validates `BL60X_OTA`, sent byte count and OpenBeken-confirmed written byte count before reboot
 - Adds OTA source/file/size diagnostics
-- Footer and release metadata synchronized to 0.6.9
 
 ### 0.6.7
 - Device heading uses `Device ID - Full Name`
