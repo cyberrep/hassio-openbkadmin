@@ -1,6 +1,6 @@
 ---
 name: OpenBKAdmin
-version: "0.6.8"
+version: "0.6.9"
 slug: openbkadmin
 description: Centrally manage OpenBeken devices
 url: "https://github.com/cyberrep/hassio-openbkadmin"
